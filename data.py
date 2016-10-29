@@ -25,18 +25,18 @@ def data_iterator(source_data_path, target_data_path, source_vocab, target_vocab
         data_in    = []
         data_out   = []
         for i, (lin, lout) in enumerate(zip(f_in, f_out)):
-            if next_batch - prev_batch < batch_size:
-                in_text = [source_vocab[w] if w in source_vocab else source_vocab["<unk>"]
-                           for w in lin.replace("\n", "").split(" ")][:max_size][::-1]
-                out_text = [target_vocab[w] if w in target_vocab else target_vocab["<unk>"]
-                            for w in lout.replace("\n", " " + str(target_vocab["</s>"]))
-                            .split(" ")][:max_size-1]
-                out_text = [target_vocab["<s>"]] + out_text
-                data_in.append(pre_pad(in_text, source_vocab["<pad>"], max_size))
-                data_out.append(post_pad(out_text, target_vocab["<pad>"], max_size))
-                next_batch += 1
-            else:
-                prev_batch = next_batch
+            if i - prev_batch >= batch_size:
+                prev_batch = i
                 yield data_in, data_out
                 data_in  = []
                 data_out = []
+            in_text = [source_vocab[w] if w in source_vocab else source_vocab["<unk>"]
+                       for w in lin.replace("\n", "").split(" ")][:max_size][::-1]
+            out_text = [target_vocab[w] if w in target_vocab else target_vocab["<unk>"]
+                        for w in lout.replace("\n", " " + str(target_vocab["</s>"]))
+                        .split(" ")][:max_size-1]
+            out_text = [target_vocab["<s>"]] + out_text
+            data_in.append(pre_pad(in_text, source_vocab["<pad>"], max_size))
+            data_out.append(post_pad(out_text, target_vocab["<pad>"], max_size))
+
+        yield data_in, data_out
