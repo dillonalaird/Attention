@@ -39,4 +39,5 @@ def data_iterator(source_data_path, target_data_path, source_vocab, target_vocab
             data_in.append(pre_pad(in_text, source_vocab["<pad>"], max_size))
             data_out.append(post_pad(out_text, target_vocab["<pad>"], max_size))
 
-        yield data_in, data_out
+        if (i + 1) % batch_size == 0:
+            yield data_in, data_out
