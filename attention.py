@@ -63,35 +63,36 @@ class AttentionNN(object):
             self.proj_b = tf.Variable(tf.random_uniform([self.t_nwords],
                                       minval=self.minval, maxval=self.maxval), name="b")
 
-        source_idxs = tf.split(1, self.max_size, self.source)
+        # TODO: put this cpu?
+        source_xs = tf.nn.embedding_lookup(self.s_emb, self.source)
+        target_xs = tf.nn.embedding_lookup(self.t_emb, self.target)
+
         initial_state = self.encoder.zero_state(self.batch_size, tf.float32)
         s = initial_state
         with tf.variable_scope("encoder"):
-            for t in xrange(self.max_size):
-                x = tf.nn.embedding_lookup(self.s_emb, source_idxs[t])
+            for t, x in enumerate(tf.split(1, self.max_size, source_xs)):
                 x = tf.squeeze(x)
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.encoder(x, s)
                 s = hs[1]
 
-        logits = []
-        probs  = []
-        target_idxs = tf.split(1, self.max_size, self.target)
+        logits     = []
+        self.probs = []
         # s is now final encoding hidden state
         with tf.variable_scope("decoder"):
-            for t in xrange(self.max_size):
-                x = tf.nn.embedding_lookup(self.t_emb, target_idxs[t])
+            for t, x in enumerate(tf.split(1, self.max_size, target_xs)):
                 x = tf.squeeze(x)
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.decoder(x, s)
                 s = hs[1]
 
                 logit = tf.batch_matmul(hs[0], self.proj_W) + self.proj_b
-                probs.append(tf.nn.softmax(logit))
+                prob  = tf.nn.softmax(logit)
                 logits.append(logit)
+                self.probs.append(prob)
 
         logits     = logits[:-1]
-        targets    = target_idxs[1:]
+        targets    = tf.split(1, self.max_size, self.target)[1:]
         weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
         self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
         self.optim = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss)
