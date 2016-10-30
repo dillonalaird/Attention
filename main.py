@@ -16,6 +16,7 @@ flags.DEFINE_integer("random_seed", 123, "Value of random seed [123]")
 flags.DEFINE_integer("epochs", 10, "Number of epochs to run [10]")
 flags.DEFINE_integer("hidden_size", 1024, "Size of hidden units [1024]")
 flags.DEFINE_integer("num_layers", 4, "Depth of RNNs [4]")
+flags.DEFINE_float("dropout", 0.0, "Dropout probability [0.0]")
 flags.DEFINE_float("minval", -0.1, "Minimum value for initialization [-0.1]")
 flags.DEFINE_float("maxval", 0.1, "Maximum value for initialization [0.1]")
 flags.DEFINE_float("lr_init", 1.0, "Initial learning rate [1.0]")
@@ -72,11 +73,9 @@ def main(_):
 
     s_nwords  = len(read_vocabulary(config.source_vocab_path))
     t_nwords  = len(read_vocabulary(config.target_vocab_path))
-    data_size = len(open(config.source_data_path).readlines())
 
     config.s_nwords  = s_nwords
     config.t_nwords  = t_nwords
-    config.data_size = data_size
     with tf.Session() as sess:
         if not config.is_test:
             attn = AttentionNN(config, sess)
