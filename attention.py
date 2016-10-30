@@ -63,18 +63,33 @@ class AttentionNN(object):
             self.proj_b = tf.Variable(tf.random_uniform([self.t_nwords],
                                       minval=self.minval, maxval=self.maxval), name="b")
 
+        with tf.variable_scope("attention"):
+            self.v_a = tf.Variable(tf.random_uniform([self.hidden_size, 1],
+                                   minval=self.minval, maxval=self.maxval), name="v_a")
+            self.W_a = tf.Variable(tf.random_uniform([2*self.hidden_size, self.hidden_size],
+                                   minval=self.minval, maxval=self.maxval), name="W_a")
+            self.b_a = tf.Variable(tf.random_uniform([self.hidden_size],
+                                   minval=self.minval, maxval=self.maxval), name="b_a")
+            self.W_c = tf.Variable(tf.random_uniform([2*self.hidden_size, self.hidden_size],
+                                   minval=self.minval, maxval=self.maxval), name="W_c")
+            self.b_c = tf.Variable(tf.random_uniform([self.hidden_size],
+                                   minval=self.minval, maxval=self.maxval), name="b_a")
+
         # TODO: put this cpu?
         source_xs = tf.nn.embedding_lookup(self.s_emb, self.source)
         target_xs = tf.nn.embedding_lookup(self.t_emb, self.target)
 
         initial_state = self.encoder.zero_state(self.batch_size, tf.float32)
         s = initial_state
+        encoder_hs = []
         with tf.variable_scope("encoder"):
             for t, x in enumerate(tf.split(1, self.max_size, source_xs)):
                 x = tf.squeeze(x)
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.encoder(x, s)
                 s = hs[1]
+                h = hs[0]
+                encoder_hs.append(h)
 
         logits     = []
         self.probs = []
@@ -85,8 +100,19 @@ class AttentionNN(object):
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.decoder(x, s)
                 s = hs[1]
+                h = hs[0]
 
-                logit = tf.batch_matmul(hs[0], self.proj_W) + self.proj_b
+                scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h, h_s]),
+                                                            self.W_a) + self.b_a),
+                                                            self.v_a)
+                          for h_s in encoder_hs]
+                scores = tf.nn.softmax(tf.reshape(tf.pack(scores),
+                                       [self.batch_size, self.max_size]))
+                c_t = tf.reduce_sum([a_s*h_s for a_s, h_s in
+                                     zip(tf.split(1, self.max_size, scores),
+                                         encoder_hs)], 0)
+                h_t = tf.batch_matmul(tf.concat(1, [h, c_t]), self.W_c) + self.b_c
+                logit = tf.batch_matmul(h_t, self.proj_W) + self.proj_b
                 prob  = tf.nn.softmax(logit)
                 logits.append(logit)
                 self.probs.append(prob)
@@ -143,6 +169,8 @@ class AttentionNN(object):
                 total_loss += loss
                 if i % 2 == 0:
                     writer.add_summary(outputs[-1], N*epoch + i)
+                if i % 100 == 0:
+                    print("Epoch: {}, Iteration: {}, Loss: {}".format(epoch, i, loss))
                 i += 1
 
             step = outputs[1]
