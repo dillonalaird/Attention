@@ -100,7 +100,8 @@ class AttentionNN(object):
         # TODO: renormalize gradients instead of clip
         opt = tf.train.GradientDescentOptimizer(self.lr)
         trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        gvs = opt.compute_gradients(self.loss, [v for v in trainable_vars])
+        gvs = opt.compute_gradients(self.loss, [v for v in trainable_vars],
+                aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE)
         clipped_gvs = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g,v in gvs]
         with tf.control_dependencies([inc]):
             self.optim = opt.apply_gradients(clipped_gvs)
