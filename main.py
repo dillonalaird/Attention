@@ -52,7 +52,7 @@ class medium:
     source_data_path  = "data/train.medium.en"
     target_data_path  = "data/train.medium.de"
     source_vocab_path = "data/vocab.medium.en"
-    target_vocab_path = "data/vocab.medium.vi"
+    target_vocab_path = "data/vocab.medium.de"
 
 
 def main(_):
