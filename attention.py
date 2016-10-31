@@ -192,7 +192,7 @@ class AttentionNN(object):
                             os.path.join(self.checkpoint_dir, self.get_model_name()),
                             global_step=step.astype(int))
             # without dropout after with, with dropout after 8
-            if epoch > 5:
+            if epoch > 8:
                 self.lr_init = self.lr_init/2
                 self.lr.assign(self.lr_init).eval()
         if self.show:

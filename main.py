@@ -13,7 +13,7 @@ flags = tf.app.flags
 flags.DEFINE_integer("max_size", 30, "Maximum sentence length [30]")
 flags.DEFINE_integer("batch_size", 128, "Number of examples in minibatch [128]")
 flags.DEFINE_integer("random_seed", 123, "Value of random seed [123]")
-flags.DEFINE_integer("epochs", 10, "Number of epochs to run [10]")
+flags.DEFINE_integer("epochs", 12, "Number of epochs to run [10]")
 flags.DEFINE_integer("hidden_size", 1024, "Size of hidden units [1024]")
 flags.DEFINE_integer("num_layers", 4, "Depth of RNNs [4]")
 flags.DEFINE_float("dropout", 0.2, "Dropout probability [0.2]")
