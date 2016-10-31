@@ -27,6 +27,7 @@ class AttentionNN(object):
         self.maxval        = config.maxval
         self.lr_init       = config.lr_init
         self.max_grad_norm = config.max_grad_norm
+        self.dataset       = config.dataset
 
         self.source_data_path  = config.source_data_path
         self.target_data_path  = config.target_data_path
@@ -153,7 +154,7 @@ class AttentionNN(object):
 
     def get_model_name(self):
         date = datetime.now()
-        return "attention-{}-{}-{}".format(date.month, date.day, date.hour)
+        return "attention-{}-{}-{}-{}".format(self.dataset, date.month, date.day, date.hour)
 
     def train(self):
         data_size = len(open(self.source_data_path).readlines())
