@@ -50,19 +50,17 @@ class AttentionNN(object):
             self.s_emb = tf.Variable(tf.random_uniform([self.s_nwords, self.hidden_size],
                                      minval=self.minval, maxval=self.maxval), name="embedding")
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
-            self.encoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
             if self.dropout > 0:
-                self.encoder = tf.nn.rnn_cell.DropoutWrapper(self.encoder,
-                        output_keep_prob=(1-self.dropout))
+                cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
+            self.encoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
         with tf.variable_scope("decoder"):
             self.t_emb = tf.Variable(tf.random_uniform([self.t_nwords, self.hidden_size],
                                      minval=self.minval, maxval=self.maxval), name="embedding")
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
-            self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
             if self.dropout > 0:
-                self.decoder = tf.nn.rnn_cell.DropoutWrapper(self.decoder,
-                        output_keep_prob=(1-self.dropout))
+                cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
+            self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
         with tf.variable_scope("proj"):
             self.proj_W = tf.Variable(tf.random_uniform([self.hidden_size, self.t_nwords],
