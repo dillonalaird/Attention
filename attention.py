@@ -113,7 +113,7 @@ class AttentionNN(object):
         attn_hs    = []
         encoder_hs = tf.pack(encoder_hs)
         with tf.variable_scope("attention"):
-            for t, h_t in enumerate(decoder_hs):
+            for h_t in decoder_hs:
                 scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s)]),
                                                             self.W_a) + self.b_a),
                                                             self.v_a)
