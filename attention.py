@@ -47,42 +47,45 @@ class AttentionNN(object):
         self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
 
         with tf.variable_scope("encoder"):
-            self.s_emb = tf.Variable(tf.random_uniform([self.s_nwords, self.hidden_size],
-                                     minval=self.minval, maxval=self.maxval), name="embedding")
+            self.s_emb = tf.get_variable("embedding", shape=[self.s_nwords, self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             if self.dropout > 0:
                 cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.encoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
         with tf.variable_scope("decoder"):
-            self.t_emb = tf.Variable(tf.random_uniform([self.t_nwords, self.hidden_size],
-                                     minval=self.minval, maxval=self.maxval), name="embedding")
+            self.t_emb = tf.get_variable("embedding", shape=[self.t_nwords, self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             if self.dropout > 0:
                 cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
-        with tf.variable_scope("proj"):
-            self.proj_W = tf.Variable(tf.random_uniform([self.hidden_size, self.t_nwords],
-                                      minval=self.minval, maxval=self.maxval), name="W")
-            self.proj_b = tf.Variable(tf.random_uniform([self.t_nwords],
-                                      minval=self.minval, maxval=self.maxval), name="b")
+        #with tf.variable_scope("proj"):
+        with tf.variable_scope("attention"):
+            self.proj_W = tf.get_variable("W", shape=[self.hidden_size, self.t_nwords],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.proj_b = tf.get_variable("b", shape=[self.t_nwords],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
 
         with tf.variable_scope("attention"):
-            self.v_a = tf.Variable(tf.random_uniform([self.hidden_size, 1],
-                                   minval=self.minval, maxval=self.maxval), name="v_a")
-            self.W_a = tf.Variable(tf.random_uniform([2*self.hidden_size, self.hidden_size],
-                                   minval=self.minval, maxval=self.maxval), name="W_a")
-            self.b_a = tf.Variable(tf.random_uniform([self.hidden_size],
-                                   minval=self.minval, maxval=self.maxval), name="b_a")
-            self.W_c = tf.Variable(tf.random_uniform([2*self.hidden_size, self.hidden_size],
-                                   minval=self.minval, maxval=self.maxval), name="W_c")
-            self.b_c = tf.Variable(tf.random_uniform([self.hidden_size],
-                                   minval=self.minval, maxval=self.maxval), name="b_a")
+            self.v_a = tf.get_variable("v_a", shape=[self.hidden_size, 1],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.W_a = tf.get_variable("W_a", shape=[2*self.hidden_size, self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.b_a = tf.get_variable("b_a", shape=[self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.W_c = tf.get_variable("W_c", shape=[2*self.hidden_size, self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.b_c = tf.get_variable("b_c", shape=[self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
 
         # TODO: put this cpu?
-        source_xs = tf.nn.embedding_lookup(self.s_emb, self.source)
-        target_xs = tf.nn.embedding_lookup(self.t_emb, self.target)
+        with tf.variable_scope("encoder"):
+            source_xs = tf.nn.embedding_lookup(self.s_emb, self.source)
+        with tf.variable_scope("decoder"):
+            target_xs = tf.nn.embedding_lookup(self.t_emb, self.target)
 
         initial_state = self.encoder.zero_state(self.batch_size, tf.float32)
         s = initial_state
@@ -96,9 +99,6 @@ class AttentionNN(object):
                 h = hs[0]
                 encoder_hs.append(h)
 
-        encoder_hs = tf.pack(encoder_hs)
-        logits     = []
-        self.probs = []
         decoder_hs = []
         # s is now final encoding hidden state
         with tf.variable_scope("decoder"):
@@ -110,6 +110,8 @@ class AttentionNN(object):
                 h = hs[0]
                 decoder_hs.append(h)
 
+        attn_hs    = []
+        encoder_hs = tf.pack(encoder_hs)
         with tf.variable_scope("attention"):
             for t, h_t in enumerate(decoder_hs):
                 scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s)]),
@@ -120,6 +122,12 @@ class AttentionNN(object):
                 scores = tf.expand_dims(scores, [2])
                 c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), scores))
                 h_t    = tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c
+                attn_hs.append(h_t)
+
+        logits     = []
+        self.probs = []
+        with tf.variable_scope("proj"):
+            for h_t in attn_hs:
                 logit  = tf.batch_matmul(h_t, self.proj_W) + self.proj_b
                 prob   = tf.nn.softmax(logit)
                 logits.append(logit)
