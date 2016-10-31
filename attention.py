@@ -62,8 +62,7 @@ class AttentionNN(object):
                 cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
-        #with tf.variable_scope("proj"):
-        with tf.variable_scope("attention"):
+        with tf.variable_scope("proj"):
             self.proj_W = tf.get_variable("W", shape=[self.hidden_size, self.t_nwords],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             self.proj_b = tf.get_variable("b", shape=[self.t_nwords],
