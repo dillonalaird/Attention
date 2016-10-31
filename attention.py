@@ -110,16 +110,16 @@ class AttentionNN(object):
                 s = hs[1]
                 h = hs[0]
 
-                scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h, h_s]),
+                scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h, tf.squeeze(h_s)]),
                                                             self.W_a) + self.b_a),
                                                             self.v_a)
-                          for h_s in encoder_hs]
+                          for h_s in tf.split(0, self.max_size, encoder_hs)]
                 scores = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
                 scores = tf.expand_dims(scores, [2])
-                c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs), perm=[1,2,0]), scores)
-                h_t = tf.batch_matmul(tf.concat(1, [h, c_t]), self.W_c) + self.b_c
-                logit = tf.batch_matmul(h_t, self.proj_W) + self.proj_b
-                prob  = tf.nn.softmax(logit)
+                c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), scores))
+                h_t    = tf.batch_matmul(tf.concat(1, [h, c_t]), self.W_c) + self.b_c
+                logit  = tf.batch_matmul(h_t, self.proj_W) + self.proj_b
+                prob   = tf.nn.softmax(logit)
                 logits.append(logit)
                 self.probs.append(prob)
 
