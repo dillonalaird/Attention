@@ -18,6 +18,7 @@ class AttentionNN(object):
         self.num_layers    = config.num_layers
         self.batch_size    = config.batch_size
         self.max_size      = config.max_size
+        self.dropout       = config.dropout
         self.epochs        = config.epochs
         self.s_nwords      = config.s_nwords
         self.t_nwords      = config.t_nwords
@@ -50,12 +51,18 @@ class AttentionNN(object):
                                      minval=self.minval, maxval=self.maxval), name="embedding")
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             self.encoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
+            if self.dropout > 0:
+                self.encoder = tf.nn.rnn_cell.DropoutWrapper(self.encoder,
+                        output_keep_prob=(1-self.dropout))
 
         with tf.variable_scope("decoder"):
             self.t_emb = tf.Variable(tf.random_uniform([self.t_nwords, self.hidden_size],
                                      minval=self.minval, maxval=self.maxval), name="embedding")
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
+            if self.dropout > 0:
+                self.decoder = tf.nn.rnn_cell.DropoutWrapper(self.decoder,
+                        output_keep_prob=(1-self.dropout))
 
         with tf.variable_scope("proj"):
             self.proj_W = tf.Variable(tf.random_uniform([self.hidden_size, self.t_nwords],
@@ -91,6 +98,7 @@ class AttentionNN(object):
                 h = hs[0]
                 encoder_hs.append(h)
 
+        encoder_hs = tf.pack(encoder_hs)
         logits     = []
         self.probs = []
         # s is now final encoding hidden state
@@ -106,11 +114,9 @@ class AttentionNN(object):
                                                             self.W_a) + self.b_a),
                                                             self.v_a)
                           for h_s in encoder_hs]
-                scores = tf.nn.softmax(tf.reshape(tf.pack(scores),
-                                       [self.batch_size, self.max_size]))
-                c_t = tf.reduce_sum([a_s*h_s for a_s, h_s in
-                                     zip(tf.split(1, self.max_size, scores),
-                                         encoder_hs)], 0)
+                scores = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
+                scores = tf.expand_dims(scores, [2])
+                c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs), perm=[1,2,0]), scores)
                 h_t = tf.batch_matmul(tf.concat(1, [h, c_t]), self.W_c) + self.b_c
                 logit = tf.batch_matmul(h_t, self.proj_W) + self.proj_b
                 prob  = tf.nn.softmax(logit)
