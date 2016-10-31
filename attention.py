@@ -136,7 +136,6 @@ class AttentionNN(object):
         targets    = tf.split(1, self.max_size, self.target)[1:]
         weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
         self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
-        self.optim = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss)
         inc = self.global_step.assign_add(1)
 
         # TODO: renormalize gradients instead of clip
