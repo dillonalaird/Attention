@@ -117,10 +117,10 @@ class AttentionNN(object):
                                                             self.W_a) + self.b_a),
                                                             self.v_a)
                           for h_s in tf.split(0, self.max_size, encoder_hs)]
-                scores = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
-                scores = tf.expand_dims(scores, [2])
-                c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), scores))
-                h_t    = tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c
+                a_t    = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
+                a_t    = tf.expand_dims(a_t, 2)
+                c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t))
+                h_t    = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
                 attn_hs.append(h_t)
 
         logits     = []
@@ -149,6 +149,7 @@ class AttentionNN(object):
             self.optim = opt.apply_gradients(clipped_gvs)
 
         self.sess.run(tf.initialize_all_variables())
+        tf.train.write_graph(self.sess.graph_def, "./logs", "attn_graph.pb", False)
         tf.scalar_summary("loss", self.loss)
         self.saver = tf.train.Saver()
 
