@@ -148,7 +148,6 @@ class AttentionNN(object):
             self.optim = opt.apply_gradients(clipped_gvs)
 
         self.sess.run(tf.initialize_all_variables())
-        tf.train.write_graph(self.sess.graph_def, "./logs", "attn_graph.pb", False)
         tf.scalar_summary("loss", self.loss)
         self.saver = tf.train.Saver()
 
