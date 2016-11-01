@@ -190,7 +190,7 @@ class AttentionNN(object):
             total_loss = 0.
             for dsource, dtarget in iterator:
                 if self.show: bar.next()
-                outputs = self.sess.run([self.loss, self.global_step, self.optim, merged_sum],
+                outputs = self.sess.run([self.loss, self.optim, merged_sum],
                                         feed_dict={self.source: dsource,
                                                    self.target: dtarget})
                 loss = outputs[0]
