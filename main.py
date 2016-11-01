@@ -25,7 +25,7 @@ flags.DEFINE_float("max_grad_norm", 5.0, "Maximum gradient cutoff [5.0]")
 flags.DEFINE_string("checkpoint_dir", "checkpoints", "Checkpoint directory [checkpoints]")
 flags.DEFINE_string("dataset", "small", "Dataset to use [small]")
 flags.DEFINE_boolean("is_test", False, "True for testing, False for training [False]")
-flags.DEFINE_boolean("show", True, "Show progress [True]")
+flags.DEFINE_boolean("show", False, "Show progress [False]")
 
 FLAGS = flags.FLAGS
 
