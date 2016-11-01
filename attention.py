@@ -122,10 +122,10 @@ class AttentionNN(object):
                 logits.append(logit)
                 probs.append(prob)
                 if self.is_test:
-                    x = target_xs[t]
-                else:
                     x = tf.cast(tf.argmax(prob, 1), tf.int32)
                     x = tf.squeeze(tf.nn.embedding_lookup(self.t_emb, x))
+                else:
+                    x = target_xs[t]
 
         logits    = logits[:-1]
         targets   = tf.split(1, self.max_size, self.target)[1:]
