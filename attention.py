@@ -51,7 +51,9 @@ class AttentionNN(object):
         with tf.variable_scope("encoder"):
             self.s_emb = tf.get_variable("embedding", shape=[self.s_nwords, self.emb_size],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
-            self.s_proj = tf.get_variable("s_proj", shape=[self.emb_size, self.hidden_size],
+            self.s_proj_W = tf.get_variable("s_proj_W", shape=[self.emb_size, self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.s_proj_b = tf.get_variable("s_proj_b", shape=[self.hidden_size],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             if self.dropout > 0:
@@ -61,7 +63,9 @@ class AttentionNN(object):
         with tf.variable_scope("decoder"):
             self.t_emb = tf.get_variable("embedding", shape=[self.t_nwords, self.emb_size],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
-            self.t_proj = tf.get_variable("t_proj", shape=[self.emb_size, self.hidden_size],
+            self.t_proj_W = tf.get_variable("t_proj_W", shape=[self.emb_size, self.hidden_size],
+                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.t_proj_b = tf.get_variable("t_proj_b", shape=[self.hidden_size],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             if self.dropout > 0:
@@ -98,7 +102,7 @@ class AttentionNN(object):
         with tf.variable_scope("encoder"):
             for t, x in enumerate(tf.split(1, self.max_size, source_xs)):
                 x = tf.squeeze(x)
-                x = tf.batch_matmul(x, self.s_proj)
+                x = tf.batch_matmul(x, self.s_proj_W) + self.s_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.encoder(x, s)
                 s = hs[1]
@@ -110,7 +114,7 @@ class AttentionNN(object):
         with tf.variable_scope("decoder"):
             for t, x in enumerate(tf.split(1, self.max_size, target_xs)):
                 x = tf.squeeze(x)
-                x = tf.batch_matmul(x, self.t_proj)
+                x = tf.batch_matmul(x, self.t_proj_W) + self.t_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.decoder(x, s)
                 s = hs[1]
