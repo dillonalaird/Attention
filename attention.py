@@ -127,10 +127,10 @@ class AttentionNN(object):
                     x = tf.cast(tf.argmax(prob, 1), tf.int32)
                     x = tf.squeeze(tf.nn.embedding_lookup(self.t_emb, x))
 
-        logits     = logits[:-1]
-        targets    = tf.split(1, self.max_size, self.target)[1:]
-        weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
-        self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
+        logits    = logits[:-1]
+        targets   = tf.split(1, self.max_size, self.target)[1:]
+        weights   = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
+        self.loss = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
 
         opt = tf.train.GradientDescentOptimizer(self.lr)
         trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
@@ -152,16 +152,15 @@ class AttentionNN(object):
         h_t = hs[0]
 
         scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s)]),
-                                                    self.W_a) + self.b_a),
-                                                    self.v_a)
+                            self.W_a) + self.b_a), self.v_a)
                   for h_s in tf.split(0, self.max_size, encoder_hs)]
-        a_t    = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
-        a_t    = tf.expand_dims(a_t, 2)
-        c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t))
-        h_tld  = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
+        a_t   = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
+        a_t   = tf.expand_dims(a_t, 2)
+        c_t   = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t))
+        h_tld = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
 
-        logit  = tf.batch_matmul(h_tld, self.proj_W) + self.proj_b
-        prob   = tf.nn.softmax(logit)
+        logit = tf.batch_matmul(h_tld, self.proj_W) + self.proj_b
+        prob  = tf.nn.softmax(logit)
         return s, logit, prob
 
 
@@ -187,18 +186,18 @@ class AttentionNN(object):
                                      read_vocabulary(self.target_vocab_path),
                                      self.max_size, self.batch_size)
             i = 0
-            total_loss = 0.
             for dsource, dtarget in iterator:
                 if self.show: bar.next()
-                outputs = self.sess.run([self.loss, self.optim, merged_sum],
+                outputs = self.sess.run([self.loss, self.lr, self.optim, merged_sum],
                                         feed_dict={self.source: dsource,
                                                    self.target: dtarget})
                 loss = outputs[0]
-                total_loss += loss
+                lr   = outputs[1]
                 if i % 2 == 0:
                     writer.add_summary(outputs[-1], N*epoch + i)
                 if i % 100 == 0:
-                    print("Epoch: {}, Iteration: {}, Loss: {}".format(epoch, i, loss))
+                    print("[Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
+                          .format(epoch, i, lr, loss, np.exp(loss)))
                 i += 1
 
             self.saver.save(self.sess,
@@ -210,7 +209,6 @@ class AttentionNN(object):
         if self.show:
             bar.finish()
             print("")
-        print("Loss: {}".format(total_loss/N))
 
     def test(self, source_data_path, target_data_path):
         data_size = len(open(source_data_path).readlines())
