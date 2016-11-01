@@ -37,6 +37,8 @@ class AttentionNN(object):
         self.target_vocab_path = config.target_vocab_path
         self.checkpoint_dir    = config.checkpoint_dir
 
+        if self.is_test: self.dropout = 0.
+
         if not os.path.isdir(self.checkpoint_dir):
             raise Exception("[!] Directory {} not found".format(self.checkpoint_dir))
 
@@ -46,6 +48,7 @@ class AttentionNN(object):
         self.build_model()
 
     def build_model(self):
+        self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
 
         with tf.variable_scope("encoder"):
@@ -56,8 +59,7 @@ class AttentionNN(object):
             self.s_proj_b = tf.get_variable("s_proj_b", shape=[self.hidden_size],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
-            if self.dropout > 0:
-                cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
+            cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.encoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
         with tf.variable_scope("decoder"):
@@ -68,8 +70,7 @@ class AttentionNN(object):
             self.t_proj_b = tf.get_variable("t_proj_b", shape=[self.hidden_size],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
-            if self.dropout > 0:
-                cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
+            cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
             # projection
@@ -103,7 +104,7 @@ class AttentionNN(object):
         encoder_hs = []
         with tf.variable_scope("encoder"):
             for t in xrange(self.max_size):
-                x = tf.squeeze(source_xs[t])
+                x = tf.squeeze(source_xs[t], [1])
                 x = tf.batch_matmul(x, self.s_proj_W) + self.s_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.encoder(x, s)
@@ -115,49 +116,53 @@ class AttentionNN(object):
         logits = []
         probs = []
         with tf.variable_scope("decoder"):
-            x = target_xs[0]
+            x = tf.squeeze(target_xs[0], [1])
             for t in xrange(self.max_size):
+                x   = tf.batch_matmul(x, self.t_proj_W) + self.t_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 s, logit, prob = self.decode_attention(t, x, s, encoder_hs)
                 logits.append(logit)
                 probs.append(prob)
                 if self.is_test:
                     x = tf.cast(tf.argmax(prob, 1), tf.int32)
-                    x = tf.squeeze(tf.nn.embedding_lookup(self.t_emb, x))
+                    x = tf.squeeze(tf.nn.embedding_lookup(self.t_emb, x), [1])
                 else:
-                    x = target_xs[t]
+                    x = tf.squeeze(target_xs[t], [1])
 
         logits    = logits[:-1]
         targets   = tf.split(1, self.max_size, self.target)[1:]
         weights   = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
         self.loss = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
 
-        opt = tf.train.GradientDescentOptimizer(self.lr)
-        trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        gvs = opt.compute_gradients(self.loss, [v for v in trainable_vars],
-                aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE)
-        clipped_gvs = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g,v in gvs]
-        self.optim = opt.apply_gradients(clipped_gvs)
+        self.optim = tf.contrib.layers.optimize_loss(self.loss, self.global_step,
+                self.lr_init, "SGD", clip_gradients=5.,
+                summaries=["learning_late", "loss", "gradient_norm"])
+
+        #opt = tf.train.GradientDescentOptimizer(self.lr)
+        #trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        #gvs = opt.compute_gradients(self.loss, [v for v in trainable_vars],
+        #        aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE)
+        #clipped_gvs = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g,v in gvs]
+        #self.optim = opt.apply_gradients(clipped_gvs)
+        #tf.scalar_summary("loss", self.loss)
 
         self.sess.run(tf.initialize_all_variables())
-        tf.scalar_summary("loss", self.loss)
         self.saver = tf.train.Saver()
 
     def decode_attention(self, t, x, s, encoder_hs):
-        x   = tf.squeeze(x)
-        x   = tf.batch_matmul(x, self.t_proj_W) + self.t_proj_b
-
         hs  = self.decoder(x, s)
         s   = hs[1]
         h_t = hs[0]
 
-        scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s)]),
+        scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s, [0])]),
                             self.W_a) + self.b_a), self.v_a)
                   for h_s in tf.split(0, self.max_size, encoder_hs)]
-        a_t   = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
-        a_t   = tf.expand_dims(a_t, 2)
-        c_t   = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t))
-        h_tld = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
+        scores = tf.squeeze(tf.pack(scores), [2])
+        a_t    = tf.nn.softmax(tf.transpose(scores))
+        a_t    = tf.expand_dims(a_t, 2)
+        c_t    = tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t)
+        c_t    = tf.squeeze(c_t, [2])
+        h_tld  = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
 
         logit = tf.batch_matmul(h_tld, self.proj_W) + self.proj_b
         prob  = tf.nn.softmax(logit)
@@ -169,8 +174,9 @@ class AttentionNN(object):
         return "attention-{}-{}-{}-{}".format(self.dataset, date.month, date.day, date.hour)
 
     def train(self):
-        data_size = len(open(self.source_data_path).readlines())
-        N = int(math.ceil(data_size/self.batch_size))
+        if self.show:
+            data_size = len(open(self.source_data_path).readlines())
+            N = int(math.ceil(data_size/self.batch_size))
         merged_sum = tf.merge_all_summaries()
         writer = tf.train.SummaryWriter("./logs/{}".format(self.get_model_name()),
                                         self.sess.graph)
@@ -179,22 +185,24 @@ class AttentionNN(object):
             from utils import ProgressBar
             bar = ProgressBar("Train", max=self.epochs*N)
 
+        i = 0
         for epoch in xrange(self.epochs):
             iterator = data_iterator(self.source_data_path,
                                      self.target_data_path,
                                      read_vocabulary(self.source_vocab_path),
                                      read_vocabulary(self.target_vocab_path),
                                      self.max_size, self.batch_size)
-            i = 0
             for dsource, dtarget in iterator:
                 if self.show: bar.next()
-                outputs = self.sess.run([self.loss, self.lr, self.optim, merged_sum],
+                outputs = self.sess.run([self.loss, self.lr, self.global_step, self.optim, merged_sum],
                                         feed_dict={self.source: dsource,
                                                    self.target: dtarget})
                 loss = outputs[0]
                 lr   = outputs[1]
+                step = outputs[2]
+                self.global_step.assign(step + 1).eval()
                 if i % 2 == 0:
-                    writer.add_summary(outputs[-1], N*epoch + i)
+                    writer.add_summary(outputs[-1], i)
                 if i % 1 == 0:
                     print("[Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
                           .format(datetime.now(), epoch, i, lr, loss, np.exp(loss)))
@@ -203,7 +211,7 @@ class AttentionNN(object):
             self.saver.save(self.sess,
                             os.path.join(self.checkpoint_dir, self.get_model_name()))
             # without dropout after with, with dropout after 8
-            if epoch > 8:
+            if epoch > 7:
                 self.lr_init = self.lr_init/2
                 self.lr.assign(self.lr_init).eval()
         if self.show:
