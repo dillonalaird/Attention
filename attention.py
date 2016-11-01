@@ -29,6 +29,7 @@ class AttentionNN(object):
         self.max_grad_norm = config.max_grad_norm
         self.dataset       = config.dataset
         self.emb_size      = config.emb_size
+        self.is_test       = config.is_test
 
         self.source_data_path  = config.source_data_path
         self.target_data_path  = config.target_data_path
@@ -45,7 +46,6 @@ class AttentionNN(object):
         self.build_model()
 
     def build_model(self):
-        self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
 
         with tf.variable_scope("encoder"):
@@ -72,13 +72,13 @@ class AttentionNN(object):
                 cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
-        with tf.variable_scope("proj"):
+            # projection
             self.proj_W = tf.get_variable("W", shape=[self.hidden_size, self.t_nwords],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             self.proj_b = tf.get_variable("b", shape=[self.t_nwords],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
 
-        with tf.variable_scope("attention"):
+            # attention
             self.v_a = tf.get_variable("v_a", shape=[self.hidden_size, 1],
                     initializer=tf.random_uniform_initializer(self.minval, self.maxval))
             self.W_a = tf.get_variable("W_a", shape=[2*self.hidden_size, self.hidden_size],
@@ -93,75 +93,77 @@ class AttentionNN(object):
         # TODO: put this cpu?
         with tf.variable_scope("encoder"):
             source_xs = tf.nn.embedding_lookup(self.s_emb, self.source)
+            source_xs = tf.split(1, self.max_size, source_xs)
         with tf.variable_scope("decoder"):
             target_xs = tf.nn.embedding_lookup(self.t_emb, self.target)
+            target_xs = tf.split(1, self.max_size, target_xs)
 
         initial_state = self.encoder.zero_state(self.batch_size, tf.float32)
         s = initial_state
         encoder_hs = []
         with tf.variable_scope("encoder"):
-            for t, x in enumerate(tf.split(1, self.max_size, source_xs)):
-                x = tf.squeeze(x)
+            for t in xrange(self.max_size):
+                x = tf.squeeze(source_xs[t])
                 x = tf.batch_matmul(x, self.s_proj_W) + self.s_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.encoder(x, s)
                 s = hs[1]
                 h = hs[0]
                 encoder_hs.append(h)
-
-        decoder_hs = []
-        # s is now final encoding hidden state
-        with tf.variable_scope("decoder"):
-            for t, x in enumerate(tf.split(1, self.max_size, target_xs)):
-                x = tf.squeeze(x)
-                x = tf.batch_matmul(x, self.t_proj_W) + self.t_proj_b
-                if t > 0: tf.get_variable_scope().reuse_variables()
-                hs = self.decoder(x, s)
-                s = hs[1]
-                h = hs[0]
-                decoder_hs.append(h)
-
-        attn_hs    = []
         encoder_hs = tf.pack(encoder_hs)
-        with tf.variable_scope("attention"):
-            for h_t in decoder_hs:
-                scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s)]),
-                                                            self.W_a) + self.b_a),
-                                                            self.v_a)
-                          for h_s in tf.split(0, self.max_size, encoder_hs)]
-                a_t    = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
-                a_t    = tf.expand_dims(a_t, 2)
-                c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t))
-                h_t    = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
-                attn_hs.append(h_t)
 
-        logits     = []
-        self.probs = []
-        with tf.variable_scope("proj"):
-            for h_t in attn_hs:
-                logit  = tf.batch_matmul(h_t, self.proj_W) + self.proj_b
-                prob   = tf.nn.softmax(logit)
+        logits = []
+        probs = []
+        with tf.variable_scope("decoder"):
+            x = target_xs[0]
+            for t in xrange(self.max_size):
+                if t > 0: tf.get_variable_scope().reuse_variables()
+                s, logit, prob = self.decode_attention(t, x, s, encoder_hs)
                 logits.append(logit)
-                self.probs.append(prob)
+                probs.append(prob)
+                if self.is_test:
+                    x = target_xs[t]
+                else:
+                    x = tf.cast(tf.argmax(prob, 1), tf.int32)
+                    x = tf.squeeze(tf.nn.embedding_lookup(self.t_emb, x))
 
         logits     = logits[:-1]
         targets    = tf.split(1, self.max_size, self.target)[1:]
         weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
         self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
-        inc = self.global_step.assign_add(1)
 
-        # TODO: renormalize gradients instead of clip
         opt = tf.train.GradientDescentOptimizer(self.lr)
         trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
         gvs = opt.compute_gradients(self.loss, [v for v in trainable_vars],
                 aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE)
         clipped_gvs = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g,v in gvs]
-        with tf.control_dependencies([inc]):
-            self.optim = opt.apply_gradients(clipped_gvs)
+        self.optim = opt.apply_gradients(clipped_gvs)
 
         self.sess.run(tf.initialize_all_variables())
         tf.scalar_summary("loss", self.loss)
         self.saver = tf.train.Saver()
+
+    def decode_attention(self, t, x, s, encoder_hs):
+        x   = tf.squeeze(x)
+        x   = tf.batch_matmul(x, self.t_proj_W) + self.t_proj_b
+
+        hs  = self.decoder(x, s)
+        s   = hs[1]
+        h_t = hs[0]
+
+        scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s)]),
+                                                    self.W_a) + self.b_a),
+                                                    self.v_a)
+                  for h_s in tf.split(0, self.max_size, encoder_hs)]
+        a_t    = tf.nn.softmax(tf.transpose(tf.squeeze(tf.pack(scores))))
+        a_t    = tf.expand_dims(a_t, 2)
+        c_t    = tf.squeeze(tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t))
+        h_tld  = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
+
+        logit  = tf.batch_matmul(h_tld, self.proj_W) + self.proj_b
+        prob   = tf.nn.softmax(logit)
+        return s, logit, prob
+
 
     def get_model_name(self):
         date = datetime.now()
@@ -199,10 +201,8 @@ class AttentionNN(object):
                     print("Epoch: {}, Iteration: {}, Loss: {}".format(epoch, i, loss))
                 i += 1
 
-            step = outputs[1]
             self.saver.save(self.sess,
-                            os.path.join(self.checkpoint_dir, self.get_model_name()),
-                            global_step=step.astype(int))
+                            os.path.join(self.checkpoint_dir, self.get_model_name()))
             # without dropout after with, with dropout after 8
             if epoch > 8:
                 self.lr_init = self.lr_init/2
