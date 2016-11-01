@@ -195,9 +195,9 @@ class AttentionNN(object):
                 lr   = outputs[1]
                 if i % 2 == 0:
                     writer.add_summary(outputs[-1], N*epoch + i)
-                if i % 100 == 0:
-                    print("[Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
-                          .format(epoch, i, lr, loss, np.exp(loss)))
+                if i % 1 == 0:
+                    print("[Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
+                          .format(datetime.now(), epoch, i, lr, loss, np.exp(loss)))
                 i += 1
 
             self.saver.save(self.sess,
