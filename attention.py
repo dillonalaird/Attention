@@ -81,7 +81,7 @@ class AttentionNN(object):
                                           initializer=initializer)
             self.proj_Wo = tf.get_variable("Wo", shape=[self.emb_size, self.t_nwords],
                                            initializer=initializer)
-            self.proj_bo = tf.get_variable("bo", shape=[self.emb_size, self.t_nwords],
+            self.proj_bo = tf.get_variable("bo", shape=[self.t_nwords],
                                            initializer=initializer)
 
             # attention
@@ -110,7 +110,7 @@ class AttentionNN(object):
         with tf.variable_scope("encoder"):
             for t in xrange(self.max_size):
                 x = tf.squeeze(source_xs[t], [1])
-                x = tf.batch_matmul(x, self.s_proj_W) + self.s_proj_b
+                x = tf.matmul(x, self.s_proj_W) + self.s_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 hs = self.encoder(x, s)
                 s = hs[1]
@@ -123,7 +123,7 @@ class AttentionNN(object):
         with tf.variable_scope("decoder"):
             x = tf.squeeze(target_xs[0], [1])
             for t in xrange(self.max_size):
-                x   = tf.batch_matmul(x, self.t_proj_W) + self.t_proj_b
+                x   = tf.matmul(x, self.t_proj_W) + self.t_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 s, logit, prob = self.decode_attention(t, x, s, encoder_hs)
                 logits.append(logit)
@@ -159,7 +159,7 @@ class AttentionNN(object):
         s   = hs[1]
         h_t = hs[0]
 
-        scores = [tf.matmul(tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, tf.squeeze(h_s, [0])]),
+        scores = [tf.matmul(tf.tanh(tf.matmul(tf.concat(1, [h_t, tf.squeeze(h_s, [0])]),
                             self.W_a) + self.b_a), self.v_a)
                   for h_s in tf.split(0, self.max_size, encoder_hs)]
         scores = tf.squeeze(tf.pack(scores), [2])
@@ -167,13 +167,12 @@ class AttentionNN(object):
         a_t    = tf.expand_dims(a_t, 2)
         c_t    = tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t)
         c_t    = tf.squeeze(c_t, [2])
-        h_tld  = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
+        h_tld  = tf.tanh(tf.matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
 
-        oemb  = tf.batch_matmul(h_tld, self.proj_W) + self.proj_b
-        logit = tf.batch_matmul(oemb, self.proj_Wo) + self.proj_bo
+        oemb  = tf.matmul(h_tld, self.proj_W) + self.proj_b
+        logit = tf.matmul(oemb, self.proj_Wo) + self.proj_bo
         prob  = tf.nn.softmax(logit)
         return s, logit, prob
-
 
     def get_model_name(self):
         date = datetime.now()
