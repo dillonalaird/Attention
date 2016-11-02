@@ -8,6 +8,7 @@ from data import read_vocabulary
 import tensorflow as tf
 import numpy as np
 import math
+import sys
 import os
 
 
@@ -211,6 +212,7 @@ class AttentionNN(object):
                 if i % 10 == 0:
                     print("[Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
                           .format(datetime.now(), epoch, i, lr, loss, np.exp(loss)))
+                    sys.stdout.flush()
                 i += 1
 
             self.saver.save(self.sess,
