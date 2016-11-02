@@ -50,46 +50,51 @@ class AttentionNN(object):
     def build_model(self):
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
+        initializer = tf.random_uniform_initializer(self.minval, self.maxval)
 
         with tf.variable_scope("encoder"):
             self.s_emb = tf.get_variable("embedding", shape=[self.s_nwords, self.emb_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                         initializer=initializer)
             self.s_proj_W = tf.get_variable("s_proj_W", shape=[self.emb_size, self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                            initializer=initializer)
             self.s_proj_b = tf.get_variable("s_proj_b", shape=[self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                            initializer=initializer)
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.encoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
         with tf.variable_scope("decoder"):
             self.t_emb = tf.get_variable("embedding", shape=[self.t_nwords, self.emb_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                         initializer=initializer)
             self.t_proj_W = tf.get_variable("t_proj_W", shape=[self.emb_size, self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                            initializer=initializer)
             self.t_proj_b = tf.get_variable("t_proj_b", shape=[self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                            initializer=initializer)
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, state_is_tuple=True)
             cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=(1-self.dropout))
             self.decoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
             # projection
-            self.proj_W = tf.get_variable("W", shape=[self.hidden_size, self.t_nwords],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
-            self.proj_b = tf.get_variable("b", shape=[self.t_nwords],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+            self.proj_W = tf.get_variable("W", shape=[self.hidden_size, self.emb_size],
+                                          initializer=initializer)
+            self.proj_b = tf.get_variable("b", shape=[self.emb_size],
+                                          initializer=initializer)
+            self.proj_Wo = tf.get_variable("Wo", shape=[self.emb_size, self.t_nwords],
+                                           initializer=initializer)
+            self.proj_bo = tf.get_variable("bo", shape=[self.emb_size, self.t_nwords],
+                                           initializer=initializer)
 
             # attention
             self.v_a = tf.get_variable("v_a", shape=[self.hidden_size, 1],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                       initializer=initializer)
             self.W_a = tf.get_variable("W_a", shape=[2*self.hidden_size, self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                       initializer=initializer)
             self.b_a = tf.get_variable("b_a", shape=[self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                       initializer=initializer)
             self.W_c = tf.get_variable("W_c", shape=[2*self.hidden_size, self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                       initializer=initializer)
             self.b_c = tf.get_variable("b_c", shape=[self.hidden_size],
-                    initializer=tf.random_uniform_initializer(self.minval, self.maxval))
+                                       initializer=initializer)
 
         # TODO: put this cpu?
         with tf.variable_scope("encoder"):
@@ -164,7 +169,8 @@ class AttentionNN(object):
         c_t    = tf.squeeze(c_t, [2])
         h_tld  = tf.tanh(tf.batch_matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
 
-        logit = tf.batch_matmul(h_tld, self.proj_W) + self.proj_b
+        oemb  = tf.batch_matmul(h_tld, self.proj_W) + self.proj_b
+        logit = tf.batch_matmul(oemb, self.proj_Wo) + self.proj_bo
         prob  = tf.nn.softmax(logit)
         return s, logit, prob
 
@@ -203,7 +209,7 @@ class AttentionNN(object):
                 self.global_step.assign(step + 1).eval()
                 if i % 2 == 0:
                     writer.add_summary(outputs[-1], i)
-                if i % 1 == 0:
+                if i % 10 == 0:
                     print("[Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
                           .format(datetime.now(), epoch, i, lr, loss, np.exp(loss)))
                 i += 1
