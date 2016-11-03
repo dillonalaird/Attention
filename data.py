@@ -57,7 +57,7 @@ def data_iterator_len(source_data_path,
         for i, (lin, lout) in enumerate(zip(f_in, f_out)):
             if i - prev_batch >= batch_size:
                 prev_batch = i
-                yield data_in, data_out
+                yield data_in, len_in, data_out, len_out
                 data_in  = []
                 data_out = []
                 len_in   = []
