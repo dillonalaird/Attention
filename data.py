@@ -1,6 +1,8 @@
 from __future__ import division
 from __future__ import print_function
 
+from random import shuffle
+
 
 def pre_pad(lst, pad_elt, max_len):
     nlst = [pad_elt]*max_len
@@ -18,7 +20,12 @@ def read_vocabulary(data_path):
     return {w:i for i,w in enumerate(open(data_path).read().splitlines())}
 
 
-def data_iterator(source_data_path, target_data_path, source_vocab, target_vocab, max_size, batch_size):
+def data_iterator(source_data_path,
+                  target_data_path,
+                  source_vocab,
+                  target_vocab,
+                  max_size,
+                  batch_size):
     with open(source_data_path, "rb") as f_in, open(target_data_path) as f_out:
         prev_batch = 0
         data_in    = []
@@ -86,3 +93,20 @@ def sort_data_files(source_data_path, target_data_path):
         f.write("".join([source_lines[i] for i in indices]))
     with open(target_data_path + ".sorted", "wb") as f:
         f.write("".join([target_lines[i] for i in indices]))
+
+
+def chunker(seq, size):
+    return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
+
+
+def batch_shuffle(source_data_path, target_data_path, batch_size):
+    source = open(source_data_path, "rb").readlines()
+    target = open(target_data_path, "rb").readlines()
+    source_batches = [source[i:i+batch_size] for i in xrange(0, len(source), batch_size)]
+    target_batches = [target[i:i+batch_size] for i in xrange(0, len(target), batch_size)]
+    indices = [i for i in xrange(len(source_batches))]
+    shuffle(indices)
+    with open(source_data_path + ".shuffled", "wb") as f:
+        f.write("".join(["".join(line) for i in indices for line in source_batches[i]]))
+    with open(target_data_path + ".shuffled", "wb") as f:
+        f.write("".join(["".join(line) for i in indices for line in target_batches[i]]))
