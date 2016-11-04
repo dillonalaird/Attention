@@ -81,11 +81,10 @@ def main(_):
     config.s_nwords  = s_nwords
     config.t_nwords  = t_nwords
     with tf.Session() as sess:
+        attn = AttentionNN(config, sess)
         if not config.is_test:
-            attn = AttentionNN(config, sess)
             attn.run(data_config.valid_source_data_path, data_config.valid_target_data_path)
         else:
-            attn = AttentionNN(config, sess)
             attn.load()
             loss = attn.test(data_config.test_source_data_path, data_config.test_target_data_path)
             print("[Test] [Loss: {}] [Perplexity: {}]".format(loss, np.exp(loss)))
