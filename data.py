@@ -95,10 +95,6 @@ def sort_data_files(source_data_path, target_data_path):
         f.write("".join([target_lines[i] for i in indices]))
 
 
-def chunker(seq, size):
-    return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
-
-
 def batch_shuffle(source_data_path, target_data_path, batch_size):
     source = open(source_data_path, "rb").readlines()
     target = open(target_data_path, "rb").readlines()
