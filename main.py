@@ -5,6 +5,7 @@ from attention import AttentionNN
 from data import read_vocabulary
 
 import random
+import numpy as np
 import tensorflow as tf
 
 
@@ -86,8 +87,8 @@ def main(_):
         else:
             attn = AttentionNN(config, sess)
             attn.load()
-            perplexity = attn.test(data_config.test_source_data_path, data_config.test_target_data_path)
-            print("Perplexity: {}".format(perplexity))
+            loss = attn.test(data_config.test_source_data_path, data_config.test_target_data_path)
+            print("[Test] [Loss: {}] [Perplexity: {}]".format(loss, np.exp(loss)))
 
 
 if __name__ == "__main__":
