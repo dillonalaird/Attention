@@ -139,7 +139,7 @@ class AttentionNN(object):
         weights   = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
         self.loss = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
 
-        self.optim = tf.contrib.layers.optimize_loss(self.loss, self.global_step,
+        self.optim = tf.contrib.layers.optimize_loss(self.loss, None,
                 self.lr_init, "SGD", clip_gradients=5.,
                 summaries=["learning_late", "loss", "gradient_norm"])
 
