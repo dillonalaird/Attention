@@ -7,7 +7,6 @@ from data import read_vocabulary
 
 import tensorflow as tf
 import numpy as np
-import math
 import sys
 import os
 
@@ -38,6 +37,8 @@ class AttentionNN(object):
         self.target_vocab_path = config.target_vocab_path
         self.checkpoint_dir    = config.checkpoint_dir
 
+        self.train_iters = 0
+
         if not os.path.isdir(self.checkpoint_dir):
             raise Exception("[!] Directory {} not found".format(self.checkpoint_dir))
 
@@ -48,7 +49,6 @@ class AttentionNN(object):
         self.build_model()
 
     def build_model(self):
-        self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
         initializer = tf.random_uniform_initializer(self.minval, self.maxval)
 
@@ -130,7 +130,7 @@ class AttentionNN(object):
                 probs.append(prob)
                 if self.is_test:
                     x = tf.cast(tf.argmax(prob, 1), tf.int32)
-                    x = tf.squeeze(tf.nn.embedding_lookup(self.t_emb, x), [1])
+                    x = tf.nn.embedding_lookup(self.t_emb, x)
                 else:
                     x = tf.squeeze(target_xs[t], [1])
 
@@ -178,7 +178,7 @@ class AttentionNN(object):
         date = datetime.now()
         return "{}-{}-{}-{}-{}".format(self.name, self.dataset, date.month, date.day, date.hour)
 
-    def train(self, epoch, iters_per_epoch, merged_sum, writer):
+    def train(self, epoch, merged_sum, writer):
         if epoch > 3:
             self.lr_init = self.lr_init/2
             self.lr.assign(self.lr_init).eval()
@@ -191,15 +191,13 @@ class AttentionNN(object):
                                  read_vocabulary(self.target_vocab_path),
                                  self.max_size, self.batch_size)
         for dsource, dtarget in iterator:
-            outputs = self.sess.run([self.loss, self.lr, self.global_step, self.optim, merged_sum],
+            outputs = self.sess.run([self.loss, self.lr, self.optim, merged_sum],
                                     feed_dict={self.source: dsource,
                                                self.target: dtarget,
                                                self.dropout: self.init_dropout})
             loss = outputs[0]
             lr   = outputs[1]
-            step = outputs[2]
-            itr  = iters_per_epoch*epoch + i
-            self.global_step.assign(step + 1).eval()
+            itr  = self.train_iters*epoch + i
             total_loss += loss
             if i % 2 == 0:
                 writer.add_summary(outputs[-1], itr)
@@ -208,7 +206,8 @@ class AttentionNN(object):
                       .format(datetime.now(), epoch, itr, lr, loss, np.exp(loss)))
                 sys.stdout.flush()
             i += 1
-        return total_loss/iters_per_epoch
+        self.train_iters = i
+        return total_loss/i
 
 
     def test(self, source_data_path, target_data_path):
@@ -232,15 +231,13 @@ class AttentionNN(object):
         return total_loss
 
     def run(self, valid_source_data_path, valid_target_data_path):
-        train_data_size = len(open(self.source_data_path).readlines())
-        train_iters = int(math.ceil(train_data_size/self.batch_size))
         merged_sum = tf.merge_all_summaries()
         writer = tf.train.SummaryWriter("./logs/{}".format(self.get_model_name()),
                                         self.sess.graph)
 
         best_valid_loss = float("inf")
         for epoch in xrange(self.epochs):
-            train_loss = self.train(epoch, train_iters, merged_sum, writer)
+            train_loss = self.train(epoch, merged_sum, writer)
             valid_loss = self.test(valid_source_data_path, valid_target_data_path)
             print("[Train] [Avg. Loss: {}] [Avg. Perplexity: {}]".format(train_loss, np.exp(train_loss)))
             print("[Valid] [Loss: {}] [Perplexity: {}]".format(valid_loss, np.exp(valid_loss)))
