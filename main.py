@@ -24,8 +24,8 @@ flags.DEFINE_float("lr_init", 1.0, "Initial learning rate [1.0]")
 flags.DEFINE_float("max_grad_norm", 5.0, "Maximum gradient cutoff [5.0]")
 flags.DEFINE_string("checkpoint_dir", "checkpoints", "Checkpoint directory [checkpoints]")
 flags.DEFINE_string("dataset", "small", "Dataset to use [small]")
+flags.DEFINE_string("name", "default", "Model name [default]")
 flags.DEFINE_boolean("is_test", False, "True for testing, False for training [False]")
-flags.DEFINE_boolean("show", False, "Show progress [False]")
 
 FLAGS = flags.FLAGS
 
@@ -34,12 +34,14 @@ random.seed(FLAGS.random_seed)
 
 
 class debug:
-    source_data_path      = "data/train.debug.en"
-    target_data_path      = "data/train.debug.vi"
-    source_vocab_path     = "data/vocab.small.en"
-    target_vocab_path     = "data/vocab.small.vi"
-    test_source_data_path = "data/test.debug.en"
-    test_target_data_path = "data/test.debug.vi"
+    source_data_path       = "data/train.debug.en"
+    target_data_path       = "data/train.debug.vi"
+    source_vocab_path      = "data/vocab.small.en"
+    target_vocab_path      = "data/vocab.small.vi"
+    valid_source_data_path = "data/test.debug.en"
+    valid_target_data_path = "data/test.debug.vi"
+    test_source_data_path  = "data/test.debug.en"
+    test_target_data_path  = "data/test.debug.vi"
 
 
 class small:
@@ -80,7 +82,7 @@ def main(_):
     with tf.Session() as sess:
         if not config.is_test:
             attn = AttentionNN(config, sess)
-            attn.train()
+            attn.run(data_config.valid_source_data_path, data_config.valid_target_data_path)
         else:
             attn = AttentionNN(config, sess)
             attn.load()
