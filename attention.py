@@ -199,9 +199,9 @@ class AttentionNN(object):
             lr   = outputs[1]
             itr  = self.train_iters*epoch + i
             total_loss += loss
-            if i % 2 == 0:
+            if itr % 2 == 0:
                 writer.add_summary(outputs[-1], itr)
-            if i % 10 == 0:
+            if itr % 10 == 0:
                 print("[Train] [Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
                       .format(datetime.now(), epoch, itr, lr, loss, np.exp(loss)))
                 sys.stdout.flush()
