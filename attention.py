@@ -19,11 +19,10 @@ class AttentionNN(object):
         self.num_layers    = config.num_layers
         self.batch_size    = config.batch_size
         self.max_size      = config.max_size
-        self.dropout       = config.dropout
+        self.init_dropout  = config.dropout
         self.epochs        = config.epochs
         self.s_nwords      = config.s_nwords
         self.t_nwords      = config.t_nwords
-        self.show          = config.show
         self.minval        = config.minval
         self.maxval        = config.maxval
         self.lr_init       = config.lr_init
@@ -31,6 +30,7 @@ class AttentionNN(object):
         self.dataset       = config.dataset
         self.emb_size      = config.emb_size
         self.is_test       = config.is_test
+        self.name          = config.name
 
         self.source_data_path  = config.source_data_path
         self.target_data_path  = config.target_data_path
@@ -38,13 +38,12 @@ class AttentionNN(object):
         self.target_vocab_path = config.target_vocab_path
         self.checkpoint_dir    = config.checkpoint_dir
 
-        if self.is_test: self.dropout = 0.
-
         if not os.path.isdir(self.checkpoint_dir):
             raise Exception("[!] Directory {} not found".format(self.checkpoint_dir))
 
         self.source = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="source")
         self.target = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="target")
+        self.dropout = tf.placeholder(tf.float32, name="dropout")
 
         self.build_model()
 
@@ -177,62 +176,42 @@ class AttentionNN(object):
 
     def get_model_name(self):
         date = datetime.now()
-        return "attention-{}-{}-{}-{}".format(self.dataset, date.month, date.day, date.hour)
+        return "{}-{}-{}-{}-{}".format(self.name, self.dataset, date.month, date.day, date.hour)
 
-    def train(self):
-        if self.show:
-            data_size = len(open(self.source_data_path).readlines())
-            N = int(math.ceil(data_size/self.batch_size))
-        merged_sum = tf.merge_all_summaries()
-        writer = tf.train.SummaryWriter("./logs/{}".format(self.get_model_name()),
-                                        self.sess.graph)
+    def train(self, epoch, iters_per_epoch, merged_sum, writer):
+        if epoch > 3:
+            self.lr_init = self.lr_init/2
+            self.lr.assign(self.lr_init).eval()
 
-        if self.show:
-            from utils import ProgressBar
-            bar = ProgressBar("Train", max=self.epochs*N)
-
+        total_loss = 0.
         i = 0
-        for epoch in xrange(self.epochs):
-            iterator = data_iterator(self.source_data_path,
-                                     self.target_data_path,
-                                     read_vocabulary(self.source_vocab_path),
-                                     read_vocabulary(self.target_vocab_path),
-                                     self.max_size, self.batch_size)
-            for dsource, dtarget in iterator:
-                if self.show: bar.next()
-                outputs = self.sess.run([self.loss, self.lr, self.global_step, self.optim, merged_sum],
-                                        feed_dict={self.source: dsource,
-                                                   self.target: dtarget})
-                loss = outputs[0]
-                lr   = outputs[1]
-                step = outputs[2]
-                self.global_step.assign(step + 1).eval()
-                if i % 2 == 0:
-                    writer.add_summary(outputs[-1], i)
-                if i % 10 == 0:
-                    print("[Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
-                          .format(datetime.now(), epoch, i, lr, loss, np.exp(loss)))
-                    sys.stdout.flush()
-                i += 1
+        iterator = data_iterator(self.source_data_path,
+                                 self.target_data_path,
+                                 read_vocabulary(self.source_vocab_path),
+                                 read_vocabulary(self.target_vocab_path),
+                                 self.max_size, self.batch_size)
+        for dsource, dtarget in iterator:
+            outputs = self.sess.run([self.loss, self.lr, self.global_step, self.optim, merged_sum],
+                                    feed_dict={self.source: dsource,
+                                               self.target: dtarget,
+                                               self.dropout: self.init_dropout})
+            loss = outputs[0]
+            lr   = outputs[1]
+            step = outputs[2]
+            itr  = iters_per_epoch*epoch + i
+            self.global_step.assign(step + 1).eval()
+            total_loss += loss
+            if i % 2 == 0:
+                writer.add_summary(outputs[-1], itr)
+            if i % 10 == 0:
+                print("[Train] [Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
+                      .format(datetime.now(), epoch, itr, lr, loss, np.exp(loss)))
+                sys.stdout.flush()
+            i += 1
+        return total_loss/iters_per_epoch
 
-            self.saver.save(self.sess,
-                            os.path.join(self.checkpoint_dir, self.get_model_name()))
-            # without dropout after with, with dropout after 8
-            if epoch > 7:
-                self.lr_init = self.lr_init/2
-                self.lr.assign(self.lr_init).eval()
-        if self.show:
-            bar.finish()
-            print("")
 
     def test(self, source_data_path, target_data_path):
-        data_size = len(open(source_data_path).readlines())
-        N = int(math.ceil(data_size/self.batch_size))
-
-        if self.show:
-            from utils import ProgressBar
-            bar = ProgressBar("Test", max=N)
-
         iterator = data_iterator(source_data_path,
                                  target_data_path,
                                  read_vocabulary(self.source_vocab_path),
@@ -240,19 +219,35 @@ class AttentionNN(object):
                                  self.max_size, self.batch_size)
 
         total_loss = 0
+        i = 0
         for dsource, dtarget in iterator:
-            if self.show: bar.next()
             loss = self.sess.run([self.loss],
                                  feed_dict={self.source: dsource,
-                                            self.target: dtarget})
+                                            self.target: dtarget,
+                                            self.dropout: 0.0})
             total_loss += loss[0]
+            i += 1
 
-        if self.show:
-            bar.finish()
-            print("")
-        total_loss /= N
-        perplexity = np.exp(total_loss)
-        return perplexity
+        total_loss /= i
+        return total_loss
+
+    def run(self, valid_source_data_path, valid_target_data_path):
+        train_data_size = len(open(self.source_data_path).readlines())
+        train_iters = int(math.ceil(train_data_size/self.batch_size))
+        merged_sum = tf.merge_all_summaries()
+        writer = tf.train.SummaryWriter("./logs/{}".format(self.get_model_name()),
+                                        self.sess.graph)
+
+        best_valid_loss = float("inf")
+        for epoch in xrange(self.epochs):
+            train_loss = self.train(epoch, train_iters, merged_sum, writer)
+            valid_loss = self.test(valid_source_data_path, valid_target_data_path)
+            print("[Train] [Avg. Loss: {}] [Avg. Perplexity: {}]".format(train_loss, np.exp(train_loss)))
+            print("[Valid] [Loss: {}] [Perplexity: {}]".format(valid_loss, np.exp(valid_loss)))
+            if epoch == 0 or valid_loss < best_valid_loss:
+                valid_loss = best_valid_loss
+                self.saver.save(self.sess, os.path.join(self.checkpoint_dir, self.name))
+
 
     def load(self):
         print("[*] Reading checkpoints...")
