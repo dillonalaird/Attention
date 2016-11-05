@@ -179,7 +179,7 @@ class AttentionNN(object):
         return "{}-{}-{}-{}-{}".format(self.name, self.dataset, date.month, date.day, date.hour)
 
     def train(self, epoch, merged_sum, writer):
-        if epoch > 3:
+        if epoch > 5:
             self.lr_init = self.lr_init/2
             self.lr.assign(self.lr_init).eval()
 
