@@ -134,10 +134,11 @@ class AttentionNN(object):
                 else:
                     x = tf.squeeze(target_xs[t], [1])
 
-        logits    = logits[:-1]
-        targets   = tf.split(1, self.max_size, self.target)[1:]
-        weights   = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
-        self.loss = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
+        logits     = logits[:-1]
+        targets    = tf.split(1, self.max_size, self.target)[1:]
+        weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
+        self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
+        self.probs = probs
 
         self.optim = tf.contrib.layers.optimize_loss(self.loss, None,
                 self.lr_init, "SGD", clip_gradients=5.,
@@ -229,6 +230,23 @@ class AttentionNN(object):
 
         total_loss /= i
         return total_loss
+
+    def sample(self, source_data_path):
+        source_vocab = read_vocabulary(self.source_vocab_path)
+        target_vocab = read_vocabulary(self.target_vocab_path)
+        inv_target_vocab = {v:k for k,v in target_vocab.iteritems()}
+        iterator = data_iterator(source_data_path,
+                                 source_data_path,
+                                 source_vocab,
+                                 target_vocab,
+                                 self.max_size, self.batch_size)
+        for dsource, _ in iterator:
+            dtarget = [[target_vocab["<s>"]] + [target_vocab["<pad>"]]*(self.max_size-1)]
+            probs = self.sess.run([self.probs],
+                                  feed_dict={self.source: dsource,
+                                             self.target: dtarget,
+                                             self.dropout: 0.0})
+            print(" ".join([inv_target_vocab[np.argmax(p)] for p in probs[0]]))
 
     def run(self, valid_source_data_path, valid_target_data_path):
         merged_sum = tf.merge_all_summaries()
