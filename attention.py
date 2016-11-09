@@ -160,10 +160,11 @@ class AttentionNN(object):
         s   = hs[1]
         h_t = hs[0]
 
-        scores = [tf.matmul(tf.tanh(tf.matmul(tf.concat(1, [h_t, tf.squeeze(h_s, [0])]),
-                            self.W_a) + self.b_a), self.v_a)
-                  for h_s in tf.split(0, self.max_size, encoder_hs)]
-        scores = tf.squeeze(tf.pack(scores), [2])
+        #scores = [tf.matmul(tf.tanh(tf.matmul(tf.concat(1, [h_t, tf.squeeze(h_s, [0])]),
+        #                    self.W_a) + self.b_a), self.v_a)
+        #          for h_s in tf.split(0, self.max_size, encoder_hs)]
+        #scores = tf.squeeze(tf.pack(scores), [2])
+        scores = tf.reduce_sum(tf.mul(encoder_hs, h_t), 2)
         a_t    = tf.nn.softmax(tf.transpose(scores))
         a_t    = tf.expand_dims(a_t, 2)
         c_t    = tf.batch_matmul(tf.transpose(encoder_hs, perm=[1,2,0]), a_t)
