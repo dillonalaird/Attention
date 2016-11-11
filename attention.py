@@ -138,7 +138,7 @@ class AttentionNN(object):
         targets    = tf.split(1, self.max_size, self.target)[1:]
         weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
         self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
-        self.probs = probs
+        self.probs = tf.transpose(tf.pack(probs), [1, 0, 2])
 
         self.optim = tf.contrib.layers.optimize_loss(self.loss, None,
                 self.lr_init, "SGD", clip_gradients=5.,
@@ -181,9 +181,9 @@ class AttentionNN(object):
         return "{}-{}-{}-{}-{}".format(self.name, self.dataset, date.month, date.day, date.hour)
 
     def train(self, epoch, merged_sum, writer):
-        if epoch > 5:
-            self.lr_init = self.lr_init/2
-            self.lr.assign(self.lr_init).eval()
+        #if epoch > 5:
+        #    self.lr_init = self.lr_init/2
+        #    self.lr.assign(self.lr_init).eval()
 
         total_loss = 0.
         i = 0
@@ -243,11 +243,13 @@ class AttentionNN(object):
                                  self.max_size, self.batch_size)
         for dsource, _ in iterator:
             dtarget = [[target_vocab["<s>"]] + [target_vocab["<pad>"]]*(self.max_size-1)]
+            dtarget = dtarget*self.batch_size
             probs = self.sess.run([self.probs],
                                   feed_dict={self.source: dsource,
                                              self.target: dtarget,
                                              self.dropout: 0.0})
-            print(" ".join([inv_target_vocab[np.argmax(p)] for p in probs[0]]))
+            for b in xrange(self.batch_size):
+                print(" ".join([inv_target_vocab[np.argmax(p)] for p in probs[0][b]]))
 
     def run(self, valid_source_data_path, valid_target_data_path):
         merged_sum = tf.merge_all_summaries()
