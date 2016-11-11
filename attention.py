@@ -144,14 +144,6 @@ class AttentionNN(object):
                 self.lr_init, "SGD", clip_gradients=5.,
                 summaries=["learning_late", "loss", "gradient_norm"])
 
-        #opt = tf.train.GradientDescentOptimizer(self.lr)
-        #trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        #gvs = opt.compute_gradients(self.loss, [v for v in trainable_vars],
-        #        aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE)
-        #clipped_gvs = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g,v in gvs]
-        #self.optim = opt.apply_gradients(clipped_gvs)
-        #tf.scalar_summary("loss", self.loss)
-
         self.sess.run(tf.initialize_all_variables())
         self.saver = tf.train.Saver()
 
@@ -241,6 +233,7 @@ class AttentionNN(object):
                                  source_vocab,
                                  target_vocab,
                                  self.max_size, self.batch_size)
+        samples = []
         for dsource, _ in iterator:
             dtarget = [[target_vocab["<s>"]] + [target_vocab["<pad>"]]*(self.max_size-1)]
             dtarget = dtarget*self.batch_size
@@ -249,7 +242,9 @@ class AttentionNN(object):
                                              self.target: dtarget,
                                              self.dropout: 0.0})
             for b in xrange(self.batch_size):
-                print(" ".join([inv_target_vocab[np.argmax(p)] for p in probs[0][b]]))
+                samples.append([inv_target_vocab[np.argmax(p)] for p in probs[0][b]])
+
+        return samples
 
     def run(self, valid_source_data_path, valid_target_data_path):
         merged_sum = tf.merge_all_summaries()
