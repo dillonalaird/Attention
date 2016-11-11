@@ -39,7 +39,7 @@ def data_iterator(source_data_path,
             in_text = [source_vocab[w] if w in source_vocab else source_vocab["<unk>"]
                        for w in lin.replace("\n", "").split(" ")][:max_size][::-1]
             out_text = [target_vocab[w] if w in target_vocab else target_vocab["<unk>"]
-                        for w in lout.replace("\n", " " + str(target_vocab["</s>"]))
+                        for w in lout.replace("\n", " " + "</s>")
                         .split(" ")][:max_size-1]
             out_text = [target_vocab["<s>"]] + out_text
             data_in.append(pre_pad(in_text, source_vocab["<pad>"], max_size))
@@ -72,7 +72,7 @@ def data_iterator_len(source_data_path,
             in_text = [source_vocab[w] if w in source_vocab else source_vocab["<unk>"]
                        for w in lin.replace("\n", "").split(" ")][:max_size][::-1]
             out_text = [target_vocab[w] if w in target_vocab else target_vocab["<unk>"]
-                        for w in lout.replace("\n", " " + str(target_vocab["</s>"]))
+                        for w in lout.replace("\n", " " + "</s>")
                         .split(" ")][:max_size-1]
             out_text = [target_vocab["<s>"]] + out_text
             len_in.append(len(in_text))
@@ -106,3 +106,13 @@ def batch_shuffle(source_data_path, target_data_path, batch_size):
         f.write("".join(["".join(line) for i in indices for line in source_batches[i]]))
     with open(target_data_path + ".shuffled", "wb") as f:
         f.write("".join(["".join(line) for i in indices for line in target_batches[i]]))
+
+
+def prune_sentence_length(source_data_path, target_data_path, max_size):
+    source = open(source_data_path, "rb").readlines()
+    target = open(target_data_path, "rb").readlines()
+    with open(source_data_path + ".pruned", "wb") as f_s, open(target_data_path + ".pruned", "wb") as f_t:
+        for ls, lt in zip(source, target):
+            if len(ls) < max_size and len(lt) < max_size:
+                f_s.write(ls)
+                f_t.write(lt)
