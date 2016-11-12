@@ -2,6 +2,7 @@ from __future__ import division
 from __future__ import print_function
 
 from datetime import datetime
+from data import data_iterator_len
 from data import data_iterator
 from data import read_vocabulary
 
@@ -42,13 +43,15 @@ class AttentionNN(object):
         if not os.path.isdir(self.checkpoint_dir):
             raise Exception("[!] Directory {} not found".format(self.checkpoint_dir))
 
-        self.source = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="source")
-        self.target = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="target")
-        self.dropout = tf.placeholder(tf.float32, name="dropout")
+        self.source    = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="source")
+        self.target    = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="target")
+        self.target_ws = tf.placeholder(tf.int32, [self.batch_size], name="target_len")
+        self.dropout   = tf.placeholder(tf.float32, name="dropout")
 
+        self.build_variables()
         self.build_model()
 
-    def build_model(self):
+    def build_variables(self):
         self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
         initializer = tf.random_uniform_initializer(self.minval, self.maxval)
 
@@ -96,7 +99,7 @@ class AttentionNN(object):
             self.b_c = tf.get_variable("b_c", shape=[self.hidden_size],
                                        initializer=initializer)
 
-        # TODO: put this cpu?
+    def build_model(self):
         with tf.variable_scope("encoder"):
             source_xs = tf.nn.embedding_lookup(self.s_emb, self.source)
             source_xs = tf.split(1, self.max_size, source_xs)
@@ -123,7 +126,9 @@ class AttentionNN(object):
         with tf.variable_scope("decoder"):
             x = tf.squeeze(target_xs[0], [1])
             for t in xrange(self.max_size):
-                x   = tf.matmul(x, self.t_proj_W) + self.t_proj_b
+                if not self.is_test or t == 0:
+                    x = tf.squeeze(target_xs[t], [1])
+                x = tf.matmul(x, self.t_proj_W) + self.t_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
                 s, logit, prob = self.decode_attention(t, x, s, encoder_hs)
                 logits.append(logit)
@@ -131,20 +136,18 @@ class AttentionNN(object):
                 if self.is_test:
                     x = tf.cast(tf.argmax(prob, 1), tf.int32)
                     x = tf.nn.embedding_lookup(self.t_emb, x)
-                else:
-                    x = tf.squeeze(target_xs[t], [1])
 
         logits     = logits[:-1]
         targets    = tf.split(1, self.max_size, self.target)[1:]
-        weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
-        self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
+        #weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
+        self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, self.target_ws)
         self.probs = tf.transpose(tf.pack(probs), [1, 0, 2])
 
         self.optim = tf.contrib.layers.optimize_loss(self.loss, None,
                 self.lr_init, "SGD", clip_gradients=5.,
                 summaries=["learning_late", "loss", "gradient_norm"])
 
-        self.sess.run(tf.initialize_all_variables())
+        tf.initialize_all_variables.run()
         self.saver = tf.train.Saver()
 
     def decode_attention(self, t, x, s, encoder_hs):
@@ -179,15 +182,17 @@ class AttentionNN(object):
 
         total_loss = 0.
         i = 0
-        iterator = data_iterator(self.source_data_path,
-                                 self.target_data_path,
-                                 read_vocabulary(self.source_vocab_path),
-                                 read_vocabulary(self.target_vocab_path),
-                                 self.max_size, self.batch_size)
-        for dsource, dtarget in iterator:
+        iterator = data_iterator_len(self.source_data_path,
+                                     self.target_data_path,
+                                     read_vocabulary(self.source_vocab_path),
+                                     read_vocabulary(self.target_vocab_path),
+                                     self.max_size, self.batch_size)
+        for dsource, slen, dtarget, tlen in iterator:
+            target_ws = [1.]*tlen + [0.]*(self.max_size - tlen)
             outputs = self.sess.run([self.loss, self.lr, self.optim, merged_sum],
                                     feed_dict={self.source: dsource,
                                                self.target: dtarget,
+                                               self.target_ws: target_ws,
                                                self.dropout: self.init_dropout})
             loss = outputs[0]
             lr   = outputs[1]
@@ -214,11 +219,12 @@ class AttentionNN(object):
         total_loss = 0
         i = 0
         for dsource, dtarget in iterator:
-            loss = self.sess.run([self.loss],
+            loss, = self.sess.run([self.loss],
                                  feed_dict={self.source: dsource,
                                             self.target: dtarget,
                                             self.dropout: 0.0})
-            total_loss += loss[0]
+            total_loss += loss
+            self.losses.append(loss)
             i += 1
 
         total_loss /= i
@@ -237,12 +243,12 @@ class AttentionNN(object):
         for dsource, _ in iterator:
             dtarget = [[target_vocab["<s>"]] + [target_vocab["<pad>"]]*(self.max_size-1)]
             dtarget = dtarget*self.batch_size
-            probs = self.sess.run([self.probs],
-                                  feed_dict={self.source: dsource,
-                                             self.target: dtarget,
-                                             self.dropout: 0.0})
+            probs, = self.sess.run([self.probs],
+                                   feed_dict={self.source: dsource,
+                                              self.target: dtarget,
+                                              self.dropout: 0.0})
             for b in xrange(self.batch_size):
-                samples.append([inv_target_vocab[np.argmax(p)] for p in probs[0][b]])
+                samples.append([inv_target_vocab[np.argmax(p)] for p in probs[b]])
 
         return samples
 
