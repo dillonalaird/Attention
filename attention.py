@@ -3,7 +3,6 @@ from __future__ import print_function
 
 from datetime import datetime
 from data import data_iterator_len
-from data import data_iterator
 from data import read_vocabulary
 
 import tensorflow as tf
@@ -46,7 +45,7 @@ class AttentionNN(object):
         self.source     = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="source")
         self.target     = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="target")
         self.target_len = tf.placeholder(tf.int32, [self.batch_size], name="target_len")
-        self.dropout   = tf.placeholder(tf.float32, name="dropout")
+        self.dropout    = tf.placeholder(tf.float32, name="dropout")
 
         self.build_variables()
         self.build_model()
@@ -122,7 +121,7 @@ class AttentionNN(object):
         encoder_hs = tf.pack(encoder_hs)
 
         logits = []
-        probs = []
+        probs  = []
         with tf.variable_scope("decoder"):
             x = tf.squeeze(target_xs[0], [1])
             for t in xrange(self.max_size):
@@ -220,10 +219,10 @@ class AttentionNN(object):
         i = 0
         for dsource, slen, dtarget, tlen in iterator:
             loss, = self.sess.run([self.loss],
-                                 feed_dict={self.source: dsource,
-                                            self.target: dtarget,
-                                            self.target_len: tlen,
-                                            self.dropout: 0.0})
+                                  feed_dict={self.source: dsource,
+                                             self.target: dtarget,
+                                             self.target_len: tlen,
+                                             self.dropout: 0.0})
             total_loss += loss
             i += 1
 
@@ -234,13 +233,13 @@ class AttentionNN(object):
         source_vocab = read_vocabulary(self.source_vocab_path)
         target_vocab = read_vocabulary(self.target_vocab_path)
         inv_target_vocab = {v:k for k,v in target_vocab.iteritems()}
-        iterator = data_iterator(source_data_path,
-                                 source_data_path,
-                                 source_vocab,
-                                 target_vocab,
-                                 self.max_size, self.batch_size)
+        iterator = data_iterator_len(source_data_path,
+                                     source_data_path,
+                                     source_vocab,
+                                     target_vocab,
+                                     self.max_size, self.batch_size)
         samples = []
-        for dsource, _ in iterator:
+        for dsource, slen, dtarget, tlen in iterator:
             dtarget = [[target_vocab["<s>"]] + [target_vocab["<pad>"]]*(self.max_size-1)]
             dtarget = dtarget*self.batch_size
             probs, = self.sess.run([self.probs],
@@ -266,7 +265,6 @@ class AttentionNN(object):
             if epoch == 0 or valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 self.saver.save(self.sess, os.path.join(self.checkpoint_dir, self.name))
-
 
     def load(self):
         print("[*] Reading checkpoints...")
