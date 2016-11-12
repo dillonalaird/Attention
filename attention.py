@@ -43,9 +43,9 @@ class AttentionNN(object):
         if not os.path.isdir(self.checkpoint_dir):
             raise Exception("[!] Directory {} not found".format(self.checkpoint_dir))
 
-        self.source    = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="source")
-        self.target    = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="target")
-        self.target_ws = tf.placeholder(tf.float32, [self.batch_size], name="target_len")
+        self.source     = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="source")
+        self.target     = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="target")
+        self.target_len = tf.placeholder(tf.int32, [self.batch_size], name="target_len")
         self.dropout   = tf.placeholder(tf.float32, name="dropout")
 
         self.build_variables()
@@ -139,15 +139,16 @@ class AttentionNN(object):
 
         logits     = logits[:-1]
         targets    = tf.split(1, self.max_size, self.target)[1:]
-        #weights    = [tf.ones([self.batch_size]) for _ in xrange(self.max_size - 1)]
-        self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, self.target_ws)
+        weights    = tf.unpack(tf.sequence_mask(self.target_len, self.max_size - 1,
+                                                dtype=tf.float32), None, 1)
+        self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
         self.probs = tf.transpose(tf.pack(probs), [1, 0, 2])
 
         self.optim = tf.contrib.layers.optimize_loss(self.loss, None,
                 self.lr_init, "SGD", clip_gradients=5.,
                 summaries=["learning_late", "loss", "gradient_norm"])
 
-        tf.initialize_all_variables.run()
+        tf.initialize_all_variables().run()
         self.saver = tf.train.Saver()
 
     def decode_attention(self, t, x, s, encoder_hs):
@@ -188,11 +189,10 @@ class AttentionNN(object):
                                      read_vocabulary(self.target_vocab_path),
                                      self.max_size, self.batch_size)
         for dsource, slen, dtarget, tlen in iterator:
-            target_ws = [1.]*tlen + [0.]*(self.max_size - tlen)
             outputs = self.sess.run([self.loss, self.lr, self.optim, merged_sum],
                                     feed_dict={self.source: dsource,
                                                self.target: dtarget,
-                                               self.target_ws: target_ws,
+                                               self.target_len: tlen,
                                                self.dropout: self.init_dropout})
             loss = outputs[0]
             lr   = outputs[1]
@@ -210,21 +210,21 @@ class AttentionNN(object):
 
 
     def test(self, source_data_path, target_data_path):
-        iterator = data_iterator(source_data_path,
-                                 target_data_path,
-                                 read_vocabulary(self.source_vocab_path),
-                                 read_vocabulary(self.target_vocab_path),
-                                 self.max_size, self.batch_size)
+        iterator = data_iterator_len(source_data_path,
+                                     target_data_path,
+                                     read_vocabulary(self.source_vocab_path),
+                                     read_vocabulary(self.target_vocab_path),
+                                     self.max_size, self.batch_size)
 
         total_loss = 0
         i = 0
-        for dsource, dtarget in iterator:
+        for dsource, slen, dtarget, tlen in iterator:
             loss, = self.sess.run([self.loss],
                                  feed_dict={self.source: dsource,
                                             self.target: dtarget,
+                                            self.target_len: tlen,
                                             self.dropout: 0.0})
             total_loss += loss
-            self.losses.append(loss)
             i += 1
 
         total_loss /= i
