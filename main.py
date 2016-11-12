@@ -3,7 +3,11 @@ from __future__ import print_function
 
 from attention import AttentionNN
 from data import read_vocabulary
+from bleu.length_analysis import process_files
 
+import os
+import time
+import codecs
 import random
 import numpy as np
 import tensorflow as tf
@@ -26,6 +30,7 @@ flags.DEFINE_float("max_grad_norm", 5.0, "Maximum gradient cutoff [5.0]")
 flags.DEFINE_string("checkpoint_dir", "checkpoints", "Checkpoint directory [checkpoints]")
 flags.DEFINE_string("dataset", "small", "Dataset to use [small]")
 flags.DEFINE_string("name", "default", "Model name [default]")
+flags.DEFINE_string("sample", None, "Sample from dataset [None]")
 flags.DEFINE_boolean("is_test", False, "True for testing, False for training [False]")
 
 FLAGS = flags.FLAGS
@@ -59,6 +64,15 @@ class medium:
     target_vocab_path = "data/vocab.medium.de"
 
 
+def get_bleu_score(samples, target_file):
+    hyp_file = "hyp" + str(int(time.time()))
+    with open(hyp_file, "w") as f:
+        f.write("\n".join([" ".join(w for w in s if w != "<pad>" and w != "</s>") for s in samples]))
+
+    process_files(hyp_file, target_file)
+    os.remove(hyp_file)
+
+
 def main(_):
     config = FLAGS
     if config.dataset == "small":
@@ -70,24 +84,33 @@ def main(_):
     else:
         raise Exception("[!] Unknown dataset {}".format(config.dataset))
 
-    config.source_data_path      = data_config.source_data_path
-    config.target_data_path      = data_config.target_data_path
-    config.source_vocab_path     = data_config.source_vocab_path
-    config.target_vocab_path     = data_config.target_vocab_path
+    config.source_data_path  = data_config.source_data_path
+    config.target_data_path  = data_config.target_data_path
+    config.source_vocab_path = data_config.source_vocab_path
+    config.target_vocab_path = data_config.target_vocab_path
 
-    s_nwords  = len(read_vocabulary(config.source_vocab_path))
-    t_nwords  = len(read_vocabulary(config.target_vocab_path))
+    s_nwords = len(read_vocabulary(config.source_vocab_path))
+    t_nwords = len(read_vocabulary(config.target_vocab_path))
 
     config.s_nwords  = s_nwords
     config.t_nwords  = t_nwords
     with tf.Session() as sess:
         attn = AttentionNN(config, sess)
-        if not config.is_test:
-            attn.run(data_config.valid_source_data_path, data_config.valid_target_data_path)
-        else:
+        if config.sample:
             attn.load()
-            loss = attn.test(data_config.test_source_data_path, data_config.test_target_data_path)
-            print("[Test] [Loss: {}] [Perplexity: {}]".format(loss, np.exp(loss)))
+            samples = attn.sample(config.sample)
+            for s in samples: print(" ".join(s))
+        else:
+            if not config.is_test:
+                attn.run(data_config.valid_source_data_path,
+                         data_config.valid_target_data_path)
+            else:
+                attn.load()
+                loss = attn.test(data_config.test_source_data_path,
+                                 data_config.test_target_data_path)
+                print("[Test] [Loss: {}] [Perplexity: {}]".format(loss, np.exp(loss)))
+                samples = attn.sample(data_config.test_source_data_path)
+                get_bleu_score(samples, data_config.test_target_data_path)
 
 
 if __name__ == "__main__":
