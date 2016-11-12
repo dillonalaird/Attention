@@ -95,7 +95,7 @@ def score_length(lines, sorted_lens):
   lens = []
   total_eval = []
   prev_num_sents = 0
-  bleu_script = os.path.dirname(os.path.realpath(__file__)) + 'bleu/multi-bleu.perl'
+  bleu_script = os.path.dirname(os.path.realpath(__file__)) + '/multi-bleu.perl'
   sys.stderr.write('# bleu_script = %s\n' % bleu_script)
 
   group_size = 200
