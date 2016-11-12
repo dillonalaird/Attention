@@ -69,7 +69,11 @@ class medium:
 def get_bleu_score(samples, target_file):
     hyp_file = "hyp" + str(int(time.time()))
     with open(hyp_file, "w") as f:
-        f.write("\n".join([" ".join(w for w in s if w != "<pad>" and w != "</s>") for s in samples]))
+        for sample in samples:
+            for s in sample:
+                if s == "</s>": break
+                f.write(" " + s)
+            f.write("\n")
 
     process_files(hyp_file, target_file)
     os.remove(hyp_file)
