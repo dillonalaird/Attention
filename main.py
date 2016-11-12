@@ -7,11 +7,13 @@ from bleu.length_analysis import process_files
 
 import os
 import time
-import codecs
+import pprint
 import random
 import numpy as np
 import tensorflow as tf
 
+
+pp = pprint.PrettyPrinter().pprint
 
 flags = tf.app.flags
 
@@ -94,6 +96,7 @@ def main(_):
 
     config.s_nwords  = s_nwords
     config.t_nwords  = t_nwords
+    pp(config.__dict__["__flags"])
     with tf.Session() as sess:
         attn = AttentionNN(config, sess)
         if config.sample:
