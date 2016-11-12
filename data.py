@@ -113,6 +113,6 @@ def prune_sentence_length(source_data_path, target_data_path, max_size):
     target = open(target_data_path, "rb").readlines()
     with open(source_data_path + ".pruned", "wb") as f_s, open(target_data_path + ".pruned", "wb") as f_t:
         for ls, lt in zip(source, target):
-            if len(ls) < max_size and len(lt) < max_size:
+            if len(ls.split(" ")) < max_size and len(lt.split(" ")) < max_size:
                 f_s.write(ls)
                 f_t.write(lt)
