@@ -3,7 +3,6 @@ from __future__ import print_function
 
 from datetime import datetime
 from data import data_iterator_len
-from data import data_iterator
 from data import read_vocabulary
 
 import tensorflow as tf

@@ -7,11 +7,13 @@ from bleu.length_analysis import process_files
 
 import os
 import time
-import codecs
+import pprint
 import random
 import numpy as np
 import tensorflow as tf
 
+
+pp = pprint.PrettyPrinter().pprint
 
 flags = tf.app.flags
 
@@ -67,7 +69,11 @@ class medium:
 def get_bleu_score(samples, target_file):
     hyp_file = "hyp" + str(int(time.time()))
     with open(hyp_file, "w") as f:
-        f.write("\n".join([" ".join(w for w in s if w != "<pad>" and w != "</s>") for s in samples]))
+        for sample in samples:
+            for s in sample:
+                if s == "</s>": break
+                f.write(" " + s)
+            f.write("\n")
 
     process_files(hyp_file, target_file)
     os.remove(hyp_file)
@@ -94,6 +100,7 @@ def main(_):
 
     config.s_nwords  = s_nwords
     config.t_nwords  = t_nwords
+    pp(config.__dict__["__flags"])
     with tf.Session() as sess:
         attn = AttentionNN(config, sess)
         if config.sample:
