@@ -45,7 +45,7 @@ class AttentionNN(object):
 
         self.source    = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="source")
         self.target    = tf.placeholder(tf.int32, [self.batch_size, self.max_size], name="target")
-        self.target_ws = tf.placeholder(tf.int32, [self.batch_size], name="target_len")
+        self.target_ws = tf.placeholder(tf.float32, [self.batch_size], name="target_len")
         self.dropout   = tf.placeholder(tf.float32, name="dropout")
 
         self.build_variables()
