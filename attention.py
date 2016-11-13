@@ -176,7 +176,6 @@ class AttentionNN(object):
         return "{}-{}-{}-{}-{}".format(self.name, self.dataset, date.month, date.day, date.hour)
 
     def train(self, epoch, merged_sum, writer):
-        print(self.lr_init)
         if epoch > 10 and epoch % 2 == 0 and self.lr_init > 0.00025:
             self.lr_init = self.lr_init*0.75
             self.lr.assign(self.lr_init).eval()
