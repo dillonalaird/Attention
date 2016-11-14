@@ -53,10 +53,12 @@ class debug:
 
 
 class small:
-    source_data_path  = "data/train.small.en"
-    target_data_path  = "data/train.small.vi"
-    source_vocab_path = "data/vocab.small.en"
-    target_vocab_path = "data/vocab.small.vi"
+    source_data_path       = "data/train.small.en"
+    target_data_path       = "data/train.small.vi"
+    valid_source_data_path = "data/valid.small.en"
+    valid_target_data_path = "data/valid.small.en"
+    source_vocab_path      = "data/vocab.small.en"
+    target_vocab_path      = "data/vocab.small.vi"
 
 
 class medium:
@@ -98,8 +100,8 @@ def main(_):
     s_nwords = len(read_vocabulary(config.source_vocab_path))
     t_nwords = len(read_vocabulary(config.target_vocab_path))
 
-    config.s_nwords  = s_nwords
-    config.t_nwords  = t_nwords
+    config.s_nwords = s_nwords
+    config.t_nwords = t_nwords
     pp(config.__dict__["__flags"])
     with tf.Session() as sess:
         attn = AttentionNN(config, sess)
