@@ -77,7 +77,7 @@ def data_iterator_len(source_data_path,
             out_text = [target_vocab["<s>"]] + out_text
             len_in.append(len(in_text))
             len_out.append(len(out_text))
-            data_in.append(post_pad(in_text, source_vocab["<pad>"], max_size))
+            data_in.append(pre_pad(in_text, source_vocab["<pad>"], max_size))
             data_out.append(post_pad(out_text, target_vocab["<pad>"], max_size))
 
         if (i + 1) % batch_size == 0:
