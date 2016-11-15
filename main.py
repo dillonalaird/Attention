@@ -53,12 +53,14 @@ class debug:
 
 
 class small:
-    source_data_path       = "data/train.small.en"
-    target_data_path       = "data/train.small.vi"
-    valid_source_data_path = "data/valid.small.en"
-    valid_target_data_path = "data/valid.small.en"
+    source_data_path       = "data/train.small.en.pruned"
+    target_data_path       = "data/train.small.vi.pruned"
     source_vocab_path      = "data/vocab.small.en"
     target_vocab_path      = "data/vocab.small.vi"
+    valid_source_data_path = "data/valid.small.en.pruned"
+    valid_target_data_path = "data/valid.small.vi.pruned"
+    test_source_data_path  = "data/tst2013.en.pruned"
+    test_target_data_path  = "data/tst2013.vi.pruned"
 
 
 class medium:
@@ -79,6 +81,15 @@ def get_bleu_score(samples, target_file):
 
     process_files(hyp_file, target_file)
     os.remove(hyp_file)
+
+
+def print_samples(samples):
+    for sample in samples:
+        for s in sample:
+            if s == "</s>":
+                break
+            print(" " + s, end="")
+        print()
 
 
 def main(_):
@@ -108,7 +119,7 @@ def main(_):
         if config.sample:
             attn.load()
             samples = attn.sample(config.sample)
-            for s in samples: print(" ".join(s))
+            print_samples(samples)
         else:
             if not config.is_test:
                 attn.run(data_config.valid_source_data_path,
