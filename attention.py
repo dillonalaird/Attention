@@ -5,6 +5,7 @@ from datetime import datetime
 from data import data_iterator_len
 from data import read_vocabulary
 
+import cPickle as pkl
 import tensorflow as tf
 import numpy as np
 import sys
@@ -123,7 +124,6 @@ class AttentionNN(object):
         logits = []
         probs  = []
         with tf.variable_scope("decoder"):
-            x = tf.squeeze(target_xs[0], [1])
             for t in xrange(self.max_size):
                 if not self.is_test or t == 0:
                     x = tf.squeeze(target_xs[t], [1])
@@ -176,7 +176,7 @@ class AttentionNN(object):
         return "{}-{}-{}-{}-{}".format(self.name, self.dataset, date.month, date.day, date.hour)
 
     def train(self, epoch, merged_sum, writer):
-        if epoch > 10 and epoch % 2 == 0 and self.lr_init > 0.00025:
+        if epoch > 10 and epoch % 5 == 0 and self.lr_init > 0.00025:
             self.lr_init = self.lr_init*0.75
             self.lr.assign(self.lr_init).eval()
 
@@ -251,6 +251,7 @@ class AttentionNN(object):
 
         return samples
 
+
     def run(self, valid_source_data_path, valid_target_data_path):
         merged_sum = tf.merge_all_summaries()
         writer = tf.train.SummaryWriter("./logs/{}".format(self.get_model_name()),
@@ -264,7 +265,7 @@ class AttentionNN(object):
             print("[Valid] [Loss: {}] [Perplexity: {}]".format(valid_loss, np.exp(valid_loss)))
             if epoch == 0 or valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
-                self.saver.save(self.sess, os.path.join(self.checkpoint_dir, self.name))
+                self.saver.save(self.sess, os.path.join(self.checkpoint_dir, self.name + ".bestvalid"))
 
     def load(self):
         print("[*] Reading checkpoints...")
