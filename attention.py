@@ -5,7 +5,6 @@ from datetime import datetime
 from data import data_iterator_len
 from data import read_vocabulary
 
-import cPickle as pkl
 import tensorflow as tf
 import numpy as np
 import sys
@@ -107,8 +106,7 @@ class AttentionNN(object):
             target_xs = tf.nn.embedding_lookup(self.t_emb, self.target)
             target_xs = tf.split(1, self.max_size, target_xs)
 
-        initial_state = self.encoder.zero_state(self.batch_size, tf.float32)
-        s = initial_state
+        s = self.encoder.zero_state(self.batch_size, tf.float32)
         encoder_hs = []
         with tf.variable_scope("encoder"):
             for t in xrange(self.max_size):
@@ -121,6 +119,7 @@ class AttentionNN(object):
                 encoder_hs.append(h)
         encoder_hs = tf.pack(encoder_hs)
 
+        s = self.decoder.zero_state(self.batch_size, tf.float32)
         logits = []
         probs  = []
         with tf.variable_scope("decoder"):
@@ -129,7 +128,14 @@ class AttentionNN(object):
                     x = tf.squeeze(target_xs[t], [1])
                 x = tf.matmul(x, self.t_proj_W) + self.t_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
-                s, logit, prob = self.decode_attention(t, x, s, encoder_hs)
+                hs  = self.decoder(x, s)
+                s   = hs[1]
+                h_t = hs[0]
+                h_tld = self.attention(h_t, encoder_hs)
+
+                oemb  = tf.matmul(h_tld, self.proj_W) + self.proj_b
+                logit = tf.matmul(oemb, self.proj_Wo) + self.proj_bo
+                prob  = tf.nn.softmax(logit)
                 logits.append(logit)
                 probs.append(prob)
                 if self.is_test:
@@ -150,11 +156,7 @@ class AttentionNN(object):
         tf.initialize_all_variables().run()
         self.saver = tf.train.Saver()
 
-    def decode_attention(self, t, x, s, encoder_hs):
-        hs  = self.decoder(x, s)
-        s   = hs[1]
-        h_t = hs[0]
-
+    def attention(self, h_t, encoder_hs):
         #scores = [tf.matmul(tf.tanh(tf.matmul(tf.concat(1, [h_t, tf.squeeze(h_s, [0])]),
         #                    self.W_a) + self.b_a), self.v_a)
         #          for h_s in tf.split(0, self.max_size, encoder_hs)]
@@ -166,19 +168,16 @@ class AttentionNN(object):
         c_t    = tf.squeeze(c_t, [2])
         h_tld  = tf.tanh(tf.matmul(tf.concat(1, [h_t, c_t]), self.W_c) + self.b_c)
 
-        oemb  = tf.matmul(h_tld, self.proj_W) + self.proj_b
-        logit = tf.matmul(oemb, self.proj_Wo) + self.proj_bo
-        prob  = tf.nn.softmax(logit)
-        return s, logit, prob
+        return h_tld
 
     def get_model_name(self):
         date = datetime.now()
         return "{}-{}-{}-{}-{}".format(self.name, self.dataset, date.month, date.day, date.hour)
 
     def train(self, epoch, merged_sum, writer):
-        if epoch > 10 and epoch % 5 == 0 and self.lr_init > 0.00025:
-            self.lr_init = self.lr_init*0.75
-            self.lr.assign(self.lr_init).eval()
+        #if epoch > 10 and epoch % 5 == 0 and self.lr_init > 0.00025:
+        #    self.lr_init = self.lr_init*0.75
+        #    self.lr.assign(self.lr_init).eval()
 
         total_loss = 0.
         i = 0
@@ -206,7 +205,6 @@ class AttentionNN(object):
             i += 1
         self.train_iters = i
         return total_loss/i
-
 
     def test(self, source_data_path, target_data_path):
         iterator = data_iterator_len(source_data_path,
@@ -251,7 +249,6 @@ class AttentionNN(object):
 
         return samples
 
-
     def run(self, valid_source_data_path, valid_target_data_path):
         merged_sum = tf.merge_all_summaries()
         writer = tf.train.SummaryWriter("./logs/{}".format(self.get_model_name()),
@@ -263,6 +260,7 @@ class AttentionNN(object):
             valid_loss = self.test(valid_source_data_path, valid_target_data_path)
             print("[Train] [Avg. Loss: {}] [Avg. Perplexity: {}]".format(train_loss, np.exp(train_loss)))
             print("[Valid] [Loss: {}] [Perplexity: {}]".format(valid_loss, np.exp(valid_loss)))
+            self.saver.save(self.sess, os.path.join(self.checkpiont_dir, self.name + ".epoch" + str(epoch)))
             if epoch == 0 or valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 self.saver.save(self.sess, os.path.join(self.checkpoint_dir, self.name + ".bestvalid"))
