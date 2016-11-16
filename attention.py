@@ -260,7 +260,7 @@ class AttentionNN(object):
             valid_loss = self.test(valid_source_data_path, valid_target_data_path)
             print("[Train] [Avg. Loss: {}] [Avg. Perplexity: {}]".format(train_loss, np.exp(train_loss)))
             print("[Valid] [Loss: {}] [Perplexity: {}]".format(valid_loss, np.exp(valid_loss)))
-            self.saver.save(self.sess, os.path.join(self.checkpiont_dir, self.name + ".epoch" + str(epoch)))
+            self.saver.save(self.sess, os.path.join(self.checkpoint_dir, self.name + ".epoch" + str(epoch)))
             if epoch == 0 or valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 self.saver.save(self.sess, os.path.join(self.checkpoint_dir, self.name + ".bestvalid"))
