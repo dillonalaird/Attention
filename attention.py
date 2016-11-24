@@ -144,7 +144,7 @@ class AttentionNN(object):
 
         logits     = logits[:-1]
         targets    = tf.split(1, self.max_size, self.target)[1:]
-        weights    = tf.unpack(tf.sequence_mask(self.target_len, self.max_size - 1,
+        weights    = tf.unpack(tf.sequence_mask(self.target_len - 1, self.max_size - 1,
                                                 dtype=tf.float32), None, 1)
         self.loss  = tf.nn.seq2seq.sequence_loss(logits, targets, weights)
         self.probs = tf.transpose(tf.pack(probs), [1, 0, 2])
