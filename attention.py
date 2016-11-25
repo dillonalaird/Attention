@@ -51,11 +51,11 @@ class AttentionNN(object):
         self.build_model()
 
     def build_variables(self):
-        self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
+        #self.lr = tf.Variable(self.lr_init, trainable=False, name="lr")
         initializer = tf.random_uniform_initializer(self.minval, self.maxval)
 
         with tf.variable_scope("encoder"):
-            self.s_emb = tf.get_variable("embedding", shape=[self.s_nwords, self.emb_size],
+            self.s_emb = tf.get_variable("s_embedding", shape=[self.s_nwords, self.emb_size],
                                          initializer=initializer)
             self.s_proj_W = tf.get_variable("s_proj_W", shape=[self.emb_size, self.hidden_size],
                                             initializer=initializer)
@@ -66,7 +66,7 @@ class AttentionNN(object):
             self.encoder = tf.nn.rnn_cell.MultiRNNCell([cell]*self.num_layers, state_is_tuple=True)
 
         with tf.variable_scope("decoder"):
-            self.t_emb = tf.get_variable("embedding", shape=[self.t_nwords, self.emb_size],
+            self.t_emb = tf.get_variable("t_embedding", shape=[self.t_nwords, self.emb_size],
                                          initializer=initializer)
             self.t_proj_W = tf.get_variable("t_proj_W", shape=[self.emb_size, self.hidden_size],
                                             initializer=initializer)
@@ -113,9 +113,7 @@ class AttentionNN(object):
                 x = tf.squeeze(source_xs[t], [1])
                 x = tf.matmul(x, self.s_proj_W) + self.s_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
-                hs = self.encoder(x, s)
-                s = hs[1]
-                h = hs[0]
+                h, s = self.encoder(x, s)
                 encoder_hs.append(h)
         encoder_hs = tf.pack(encoder_hs)
 
@@ -128,9 +126,7 @@ class AttentionNN(object):
                     x = tf.squeeze(target_xs[t], [1])
                 x = tf.matmul(x, self.t_proj_W) + self.t_proj_b
                 if t > 0: tf.get_variable_scope().reuse_variables()
-                hs  = self.decoder(x, s)
-                s   = hs[1]
-                h_t = hs[0]
+                h_t, s = self.decoder(x, s)
                 h_tld = self.attention(h_t, encoder_hs)
 
                 oemb  = tf.matmul(h_tld, self.proj_W) + self.proj_b
@@ -151,7 +147,7 @@ class AttentionNN(object):
 
         self.optim = tf.contrib.layers.optimize_loss(self.loss, None,
                 self.lr_init, "SGD", clip_gradients=5.,
-                summaries=["learning_late", "loss", "gradient_norm"])
+                summaries=["learning_rate", "loss", "gradient_norm"])
 
         tf.initialize_all_variables().run()
         self.saver = tf.train.Saver()
@@ -187,20 +183,19 @@ class AttentionNN(object):
                                      read_vocabulary(self.target_vocab_path),
                                      self.max_size, self.batch_size)
         for dsource, slen, dtarget, tlen in iterator:
-            outputs = self.sess.run([self.loss, self.lr, self.optim, merged_sum],
+            outputs = self.sess.run([self.loss, self.optim, merged_sum],
                                     feed_dict={self.source: dsource,
                                                self.target: dtarget,
                                                self.target_len: tlen,
                                                self.dropout: self.init_dropout})
             loss = outputs[0]
-            lr   = outputs[1]
             itr  = self.train_iters*epoch + i
             total_loss += loss
             if itr % 2 == 0:
                 writer.add_summary(outputs[-1], itr)
             if itr % 10 == 0:
                 print("[Train] [Time: {}] [Epoch: {}] [Iteration: {}] [lr: {}] [Loss: {}] [Perplexity: {}]"
-                      .format(datetime.now(), epoch, itr, lr, loss, np.exp(loss)))
+                      .format(datetime.now(), epoch, itr, self.lr_init, loss, np.exp(loss)))
                 sys.stdout.flush()
             i += 1
         self.train_iters = i
