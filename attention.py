@@ -110,9 +110,9 @@ class AttentionNN(object):
         encoder_hs = []
         with tf.variable_scope("encoder"):
             for t in xrange(self.max_size):
+                if t > 0: tf.get_variable_scope().reuse_variables()
                 x = tf.squeeze(source_xs[t], [1])
                 x = tf.matmul(x, self.s_proj_W) + self.s_proj_b
-                if t > 0: tf.get_variable_scope().reuse_variables()
                 h, s = self.encoder(x, s)
                 encoder_hs.append(h)
         encoder_hs = tf.pack(encoder_hs)
@@ -122,10 +122,10 @@ class AttentionNN(object):
         probs  = []
         with tf.variable_scope("decoder"):
             for t in xrange(self.max_size):
+                if t > 0: tf.get_variable_scope().reuse_variables()
                 if not self.is_test or t == 0:
                     x = tf.squeeze(target_xs[t], [1])
                 x = tf.matmul(x, self.t_proj_W) + self.t_proj_b
-                if t > 0: tf.get_variable_scope().reuse_variables()
                 h_t, s = self.decoder(x, s)
                 h_tld = self.attention(h_t, encoder_hs)
 
